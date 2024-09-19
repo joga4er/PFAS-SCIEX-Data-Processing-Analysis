@@ -1,3 +1,4 @@
 lohmann.egg-info*
 example_figures/*
 example_data_processed/*
+.ipynb_checkpoints/*
