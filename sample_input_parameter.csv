@@ -1,0 +1,15 @@
+,sample name sciex data,sample name publication,volume/weight/number of samples,unit (e.g. g/mL/sample),extracted sample volume [mL],used for mdl calculation
+46,blank 1 ,blank 1 ,1,sample,0.5,FALSE
+47,blank 2 ,blank 2 ,1,sample,0.5,FALSE
+48,blank 3 ,blank 3 ,1,sample,0.5,FALSE
+49,control ,control ,1,sample,0.5,FALSE
+50,Comp 1 ,Comp 1 ,1,sample,0.5,FALSE
+51,Comp 2 ,Comp 2 ,1,sample,0.5,FALSE
+52,Comp 3 ,Comp 3 ,1,sample,0.5,FALSE
+53,Comp 4 ,Comp 4 ,1,sample,0.5,FALSE
+54,UV Comp 1 ,UV Comp 1 ,1,sample,0.5,FALSE
+55,UV Comp 2 ,UV Comp 2 ,2,sample,0.5,FALSE
+56,UV Comp 3 ,UV Comp 3 ,1,sample,0.5,FALSE
+57,UV Comp 4 ,UV Comp 4 ,1,sample,0.5,FALSE
+102,PFAS QCS0 0ng/ml Ext,PFAS QCS0 0ng/ml Ext,1,sample,0.5,FALSE
+115,PFAS QCS0 0ng/ml Ext,PFAS QCS0 0ng/ml Ext,1,sample,0.5,FALSE
