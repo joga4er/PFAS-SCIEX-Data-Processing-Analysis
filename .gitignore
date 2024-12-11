@@ -2,3 +2,7 @@ lohmann.egg-info*
 example_figures/*
 example_data_processed/*
 .ipynb_checkpoints/*
+.vscode/*
+example_data_raw/*
+!example_data_raw/241031_test_data_core.txt
+!example_data_raw/241031_test_data_extended.txt
