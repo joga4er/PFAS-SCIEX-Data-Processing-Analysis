@@ -10,7 +10,8 @@ Collect all needed input data in a project directory of your choice and indicate
 When you run the script for the first time two .csv files will be created to input relevant information of your samples like volume and final desired concentration units. Once you provided all the information save the file, close it and run the script again.
 
 ##### input data
-You will process
+- exported data from Sciex Analyst software. The filename has to end either with '_core' for results originating from the core method, or with '_extended' for results originating from the extended method.
+- .csv table containing the instrumentation detection limits for all PFAS components analyzed.
 
 ##### software
 To run the jupyter notebook, you will need any kind of integrated code environment (IDE).
@@ -21,5 +22,5 @@ johanna.ganglbauer@uri.edu
 
 ### Ackknowledgement
 This work is supported by the National Institute of Environmental Health under grant P42ES027706 in superfund research project Sources, Transport, Exposure & Effects of PFAS (STEEP).
-<img src="https://web.uri.edu/wp-content/uploads/sites/1022/NIEHS_SRP_Log_horz_600.png" width="50%">
-<img src="https://web.uri.edu/wp-content/uploads/sites/1022/NIEHS_SRP_Log_horz_600.png](https://web.uri.edu/wp-content/uploads/sites/1022/steep-logo.png" width="50%">
+<img src="https://web.uri.edu/wp-content/uploads/sites/1022/NIEHS_SRP_Log_horz_600.png" width="30%">
+<img src="https://web.uri.edu/wp-content/uploads/sites/1022/NIEHS_SRP_Log_horz_600.png](https://web.uri.edu/wp-content/uploads/sites/1022/steep-logo.png" width="30%">
