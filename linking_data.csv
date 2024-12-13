@@ -1,0 +1,9 @@
+sample_name,sample_name_in_lcms,age,health_condition
+Comp 1,Comp 1,1,0
+Comp 2,Comp 2,2,0
+Comp 3,Comp 3,3,1
+Comp 4,Comp 4,4,1
+UV Comp 1,UV Comp 1,5,1
+UV Comp 2,UV Comp 2,6,1
+UV Comp 3,UV Comp 3,7,0
+UV Comp 4,UV Comp 4,8,0

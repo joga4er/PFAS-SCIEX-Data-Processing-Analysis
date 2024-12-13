@@ -1,5 +1,5 @@
-### Data Analysis Pipeline for targeted LCMS Analysis
-Jupyter notebook, which takes raw liquit chromatography mass spectroscopy (LCMS) data (exported table from SCIEX Analyst Software),
+# 1 Data Analysis Pipeline for targeted LCMS Analysis (data_analysis.ipynb)
+Jupyter notebook (python based), which takes raw liquit chromatography mass spectroscopy (LCMS) data (exported table from SCIEX Analyst Software),
 computes recovery rates, method detection limits, and ratios of default channel to MS TOF channel.
 Generates plots and writes results to excel and creates long format table (.csv) for data publications.
 The analysis is targeted at the precedure of the Lohmann lab located at University of Rhode Island at the graduate school of oceanography.
@@ -16,6 +16,9 @@ When you run the script for the first time two .csv files will be created to inp
 ##### software
 To run the jupyter notebook, you will need any kind of integrated code environment (IDE).
 E. g. you can install Anaconda and start jupyter lab from there. Alternatively cloud solutions like google colab can be used.
+
+# 2 Pipeline to link lcms data and observe correlations
+Jupyter notebook (R based), which links results from lcms data analysis pipeline to general data related to the sample like age, or health condition, evaluates Pearson correlation coefficients and creates some plots.
 
 ### Contact
 johanna.ganglbauer@uri.edu
