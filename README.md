@@ -17,13 +17,18 @@ When you run the script for the first time two .csv files will be created to inp
 To run the jupyter notebook, you will need any kind of integrated code environment (IDE).
 E. g. you can install Anaconda and start jupyter lab from there. Alternatively cloud solutions like google colab can be used.
 
-# 2 Pipeline to link lcms data and observe correlations
-Jupyter notebook (R based), which links results from lcms data analysis pipeline to general data related to the sample like age, or health condition, evaluates Pearson correlation coefficients and creates some plots.
+# 2 Pipeline to link lcms data and observe correlations (link_data.ipynb)
+Jupyter notebook (R based), which links results from lcms data analysis pipeline and proteomics results, evaluates Pearson correlation coefficients and creates some plots.
+
+##### input data
+- .csv file containing name of all samples and links to the sample name in lcms and proteomics respectively
+- .xlsx containing lcms results (will be combined to data analysis workflow above in the future)
+- .xlsx containg proteomics results
 
 ### Contact
 johanna.ganglbauer@uri.edu
 
 ### Ackknowledgement
 This work is supported by the National Institute of Environmental Health under grant P42ES027706 in superfund research project Sources, Transport, Exposure & Effects of PFAS (STEEP).
-<img src="https://web.uri.edu/wp-content/uploads/sites/1022/NIEHS_SRP_Log_horz_600.png" width="30%">
-<img src="https://web.uri.edu/wp-content/uploads/sites/1022/NIEHS_SRP_Log_horz_600.png](https://web.uri.edu/wp-content/uploads/sites/1022/steep-logo.png" width="30%">
+<img src="https://web.uri.edu/wp-content/uploads/sites/1022/NIEHS_SRP_Log_horz_600.png" width="40%">
+<img src="https://web.uri.edu/wp-content/uploads/sites/1022/NIEHS_SRP_Log_horz_600.png](https://web.uri.edu/wp-content/uploads/sites/1022/steep-logo.png" width="40%">
