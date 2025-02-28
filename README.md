@@ -19,12 +19,13 @@ To run the jupyter notebook, you will need any kind of integrated code environme
 E. g. you can install Anaconda and start jupyter lab from there. Alternatively cloud solutions like google colab can be used.
 
 # 2 Pipeline to link lcms data and observe correlations (link_data.ipynb)
-Jupyter notebook (R based), which links results from lcms data analysis pipeline and proteomics results, evaluates Pearson correlation coefficients and creates plots.
+Jupyter notebook (R based), which links results from lcms data analysis pipeline and proteomics results, evaluates Pearson correlation coefficients and p-values, and creates plots.
 
 ##### input data
 - .csv file containing name of all samples and links to the sample name in lcms and proteomics respectively
 - .xlsx containing lcms results (will be combined to data analysis workflow above in the future)
 - .xlsx containg proteomics results
+- at this stage no test data set is publicly available.
 
 ### Contact
 johanna.ganglbauer@uri.edu
