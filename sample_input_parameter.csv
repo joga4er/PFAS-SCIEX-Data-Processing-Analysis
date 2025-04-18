@@ -1,0 +1,15 @@
+,sample name sciex data,sample name publication,volume/weight/number of samples,unit (e.g. g/mL/sample),used for mdl calculation
+46,blank 1 ,blank 1 ,300,mL,FALSE
+47,blank 2 ,blank 2 ,300,mL,FALSE
+48,blank 3 ,blank 3 ,300,mL,FALSE
+49,control ,control ,300,mL,FALSE
+50,Sample 1 ,Sample 1 ,300,mL,FALSE
+51,Sample 2 ,Sample 2 ,300,mL,FALSE
+52,Sample 3 ,Sample 3 ,300,mL,FALSE
+53,Sample 4 ,Sample 4 ,300,mL,FALSE
+54,Sample 5 ,Sample 5 ,300,mL,FALSE
+55,Sample 6 ,Sample 6 ,300,mL,FALSE
+56,Sample 7 ,Sample 7 ,300,mL,FALSE
+57,Sample 8 ,Sample 8 ,300,mL,FALSE
+102,PFAS QCS0 0ng/ml Ext,PFAS QCS0 0ng/ml Ext,300,mL,FALSE
+115,PFAS QCS0 0ng/ml Ext,PFAS QCS0 0ng/ml Ext,300,mL,FALSE
