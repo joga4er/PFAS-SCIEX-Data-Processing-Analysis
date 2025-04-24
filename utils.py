@@ -5,6 +5,7 @@ import pandas as pd
 import os
 import numpy as np
 from itertools import zip_longest
+from math import log10, floor
 
 # functions
 def read_in_data_files(project_folder: str) -> pd.DataFrame:
@@ -436,6 +437,22 @@ def parse_project_folder_structure(project_folder: str) -> None:
             "There is no simulation_parameters.csv in code_parameters or your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
+    
+def round_to_n_sigfigs(x: float, n: int) -> float:
+    """Round number to n significant digits. Author is chatGPT.
+
+    :param x: Floating number to be rounded.
+    :type x: float
+    :param n: Number of digits to be displayed
+    :type n: int
+    :return: Rounded number
+    :rtype: float
+    """    
+    if x == 0:
+        return 0.0
+    if np.isnan(x):
+        return np.nan
+    return round(x, -int(floor(log10(abs(x)))) + (n - 1))
 
 
 if __name__ == "__main__":
