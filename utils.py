@@ -39,18 +39,9 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
             Place the exported results from Sciex Analyst in the project folder.
             """)
 
-    # iterate through raw filenames and ensure that file naming conventions hold true
-    for raw_data_file_name in raw_data_files_list:
-        base_name = raw_data_file_name.split(".")[0]
-        if not (base_name.endswith('_extended') or base_name.endswith('_core')):
-            raise NameError(
-                f"The file {raw_data_file_name} does not comply with file naming conventions." + \
-                "Read the instructions for details regarding the filenaming conventions."
-                )
-
     # Define columns of input which are needed for further processes:
     columns_considered = [
-        'Sample Index', 'Sample Name', 'Sample ID', 'Sample Type',
+        'Sample Index', 'Sample Name', 'Sample ID', 'Sample Type', 'Batch Name',
         'Component Name',  'Component Group Name', 'IS Name',
         'Acquisition Date & Time', 'Used', 'IDA Average Response Factor',
         'Calculated Concentration', 'Actual Concentration',
@@ -60,27 +51,56 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
     # Load input data files and put them all in one dataframe
     data = pd.DataFrame()  # initialize empty data frames
     sample_index = 0  # initialize Component Index
+    core_calibration_detected = False  # set flag variables to be able to delete calibration data if multiple batches are available
+    extended_calibration_detected = False  # set flag variables to be able to delete calibration data if multiple batches are available
+
+    # iterate over all files in project folder
     for file in raw_data_files_list:
+        # extract relevant information from file
+        [base_name, file_ending] = file.split(".")
+        batch_name = "_".join(base_name.split("_")[:-1])
+        batch_type = base_name.split("_")[-1]
+
         # read in file
-        if file[-4:] == '.csv':
+        if file_ending == 'csv':
             this_data = pd.read_csv(
                 os.path.join(project_folder, file), delimiter=',', encoding='utf-8', low_memory=False, header=0,
                 )
-        elif file[-4:] == '.txt':
+        elif file_ending == 'txt':
             this_data = pd.read_csv(
                 os.path.join(project_folder, file), delimiter='\t', encoding='utf-8', low_memory=False, header=0,
                 )
         else:
             raise ImportError('Raw input file paths must either be .csv or .txt files.')
+        
+        # introduce new column batch name
+        this_data['Batch Name'] = batch_name
 
-        # make sure each sample name ends with Ext for extended method and with Core for core method
-        if file[-12:-4] == 'extended':
+        if batch_type == 'extended':
+            # make sure each sample name ends with Ext for extended method and with Core for core method
             mask_names = this_data['Sample Name'].str.endswith('Ext')
             this_data.loc[~mask_names, 'Sample Name'] = [sample_name + ' Ext' for sample_name in this_data['Sample Name'][~mask_names].to_list()]
+            # delete calibration data if already included in previous samples
+            if extended_calibration_detected:
+                this_data = this_data.loc[this_data['Sample Type'] != 'Standard', :]
+            else:
+                if len(this_data.loc[this_data['Sample Type'] != 'Standard', :]) > 1000:
+                    extended_calibration_detected = True
 
-        elif file[-8:-4] == 'core':
+        elif batch_type == 'core':
             mask_names = this_data['Sample Name'].str.endswith('Core')
             this_data.loc[~mask_names, 'Sample Name'] = [sample_name + ' Core' for sample_name in this_data['Sample Name'][~mask_names].to_list()]
+            # delete calibration data if already included in previous samples
+            if core_calibration_detected:
+                this_data = this_data.loc[this_data['Sample Type'] != 'Standard', :]
+            else:
+                if len(this_data.loc[this_data['Sample Type'] != 'Standard', :]) > 1000:
+                    core_calibration_detected = True
+        else:
+            raise NameError(
+                f"The file {raw_data_file_name} does not comply with file naming conventions." + \
+                "Read the instructions for details regarding the filenaming conventions."
+                )
         
         # upcount sample indices and make sure they are unique
         highest_sample_index = this_data['Sample Index'].max()
@@ -102,7 +122,8 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
 # function to extract and map indices
 def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
     """Creates dataframe containing list of samples with all related information from SCIEX raw data:
-    Sample ID, Sample Type, Sample Name of Core Method, Sample Index of Core Method, Sample Name of Extended Method, Sample Index of Extended Method
+    Batch Name, Sample ID, Sample Type, Sample Name of Core Method, Sample Index of Core Method,
+    Sample Name of Extended Method, Sample Index of Extended Method
 
     :param data: Data frame containing merged raw data of all files.
     :type data: pd.DataFrame
@@ -114,80 +135,87 @@ def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
 
     # initialize pandas dataframe with sample list
     sample_list = pd.DataFrame(
-        {'Sample Number': [], 'Sample ID': [], 'Sample Type': [], 'Sample Name Core': [], 'Sample Index Core': [], 'Sample Name Extended': [], 'Sample Index Extended':[]}
+        {'Sample Number': [], 'Batch Name': [], 'Sample ID': [], 'Sample Type': [], 
+         'Sample Name Core': [], 'Sample Index Core': [], 'Sample Name Extended': [], 'Sample Index Extended':[]}
         )
     # initialize sample number
     sample_number = 0
 
     # loop over sample ids
     for sample_id in sample_ids:
-        # extract data for sample id and get all sample names for related ID
+        # extract data for sample id and get all names for related batch
         sample_id_data = data.loc[data['Sample ID'] == sample_id, :]
-        sample_names = sample_id_data['Sample Name'].unique()
-
-        # get core sample names for related sample ID
-        core_sample_names = [sample_name for sample_name in sample_names if 'Core' in sample_name]
-        # Throw error if there is more than one sample ending with 'Core' for current sample_id in loop
-        if len(core_sample_names) > 1:
-            ImportError(f"You cannot have more than one sample names ending with Ext for the Sample ID {sample_id}. Check your raw data.")
-        # Set core sample name to np.nan if it does not exist for current sample_id in loop
-        elif len(core_sample_names) == 0:
-            core_sample_name = np.nan
-            core_sample_indices = []  # initialize core sample indices
-        # Set core sample name variable to the available sample name for the extended method if it does exist for sample id in loop.
-        else:
-            core_sample_name = core_sample_names[0]
-            # extract data for core method related to sample ID and get all sample indices running under the same sample name
-            core_sample_id_data = sample_id_data.loc[data['Sample Name'] == core_sample_name, :]
-            core_sample_indices = core_sample_id_data['Sample Index'].unique()
-
-        # extract data for extended samples and get core sample names and indices for related sample ID
-        extended_sample_names = [sample_name for sample_name in sample_names if 'Ext' in sample_name]
-        # Throw error if there is more than one sample ending with 'Ext' for current sample_id in loop
-        if len(extended_sample_names) > 1:
-            ImportError(f"You cannot have more than one sample names ending with Ext for the Sample ID {sample_id}. Check your raw data.")
-        # Set extended sample name to np.nan if it does not exist for current sample_id in loop
-        elif len(extended_sample_names) == 0:
-            extended_sample_name = np.nan
-            extended_sample_indices = []  # initialize extended sample indices
-        # Set extended sample name variable to the available sample name for the extended method if it does exist for sample id in loop.
-        else:
-            extended_sample_name = extended_sample_names[0]
-            # extract data for extended method related to sample ID and get all sample indices running under the same sample name
-            extended_sample_id_data = sample_id_data.loc[data['Sample Name'] == extended_sample_name, :]
-            extended_sample_indices = extended_sample_id_data['Sample Index'].unique()
-
-        # loop over all indices from core and extended and append sample number with all information to sample list
-        for (core_sample_index, extended_sample_index) in zip_longest(core_sample_indices, extended_sample_indices, fillvalue=np.nan):
-            
-            # initialize sample types list
-            sample_types = []
-            
-            # check if core sample is available, set name to nan if not
-            if np.isnan(core_sample_index):
+        batch_names = sample_id_data['Batch Name'].unique()
+        for batch_name in batch_names:
+            # extract data for batch and get all names for related samples
+            sample_id_batch_data = sample_id_data.loc[data['Batch Name'] == batch_name,:]
+            sample_names = sample_id_batch_data['Sample Name'].unique()
+            # get core sample names for related sample ID from related bath
+            core_sample_names = [sample_name for sample_name in sample_names if 'Core' in sample_name]
+            # Throw error if there is more than one sample ending with 'Core' for current sample_id in loop
+            if len(core_sample_names) > 1:
+                ImportError(f"You cannot have more than one sample names ending with Ext for the Sample ID {sample_id}. Check your raw data.")
+            # Set core sample name to np.nan if it does not exist for current sample_id in loop
+            elif len(core_sample_names) == 0:
                 core_sample_name = np.nan
+                core_sample_indices = []  # initialize core sample indices
+            # Set core sample name variable to the available sample name for the extended method if it does exist for sample id in loop.
             else:
-                # extract sample type for core method and append to sample type list
-                sample_types.append(core_sample_id_data.loc[data['Sample Index'] == core_sample_index, 'Sample Type'].unique()[0])
+                core_sample_name = core_sample_names[0]
+                # extract data for core method related to sample ID and get all sample indices running under the same sample name
+                core_sample_id_data = sample_id_batch_data.loc[data['Sample Name'] == core_sample_name, :]
+                core_sample_indices = core_sample_id_data['Sample Index'].unique()
 
-            if np.isnan(extended_sample_index):
+            # extract data for extended samples and get core sample names and indices for related sample ID
+            extended_sample_names = [sample_name for sample_name in sample_names if 'Ext' in sample_name]
+            # Throw error if there is more than one sample ending with 'Ext' for current sample_id in loop
+            if len(extended_sample_names) > 1:
+                ImportError(f"You cannot have more than one sample names ending with Ext for the Sample ID {sample_id}. Check your raw data.")
+            # Set extended sample name to np.nan if it does not exist for current sample_id in loop
+            elif len(extended_sample_names) == 0:
                 extended_sample_name = np.nan
+                extended_sample_indices = []  # initialize extended sample indices
+            # Set extended sample name variable to the available sample name for the extended method if it does exist for sample id in loop.
             else:
-                # extract sample type for extended method and append to sample type list
-                sample_types.append(extended_sample_id_data.loc[data['Sample Index'] == extended_sample_index, 'Sample Type'].unique()[0])
+                extended_sample_name = extended_sample_names[0]
+                # extract data for extended method related to sample ID and get all sample indices running under the same sample name
+                extended_sample_id_data = sample_id_batch_data.loc[data['Sample Name'] == extended_sample_name, :]
+                extended_sample_indices = extended_sample_id_data['Sample Index'].unique()
 
-            # make sure the sample type is the same for core method and extended method
-            if len(list(set(sample_types))) > 1:
-                raise ImportError(
-                    f"The sample {core_sample_name} with index {core_sample_index} has a different " + \
-                    f"sample type as the sample {extended_sample_name} with index {extended_sample_index}."
-                )
-            else:
-                sample_type = list(set(sample_types))[0]  # save sample type variable
+            # loop over all indices from core and extended and append sample number with all information to sample list
+            for (core_sample_index, extended_sample_index) in zip_longest(core_sample_indices, extended_sample_indices, fillvalue=np.nan):
+                
+                # initialize sample types list
+                sample_types = []
+                
+                # check if core sample is available, set name to nan if not
+                if np.isnan(core_sample_index):
+                    core_sample_name = np.nan
+                else:
+                    # extract sample type for core method and append to sample type list
+                    sample_types.append(core_sample_id_data.loc[data['Sample Index'] == core_sample_index, 'Sample Type'].unique()[0])
 
-            # append line to data frame
-            sample_list.loc[sample_number] = [sample_number, sample_id, sample_type, core_sample_name, core_sample_index, extended_sample_name, extended_sample_index]
-            sample_number += 1  # upcount sample number
+                if np.isnan(extended_sample_index):
+                    extended_sample_name = np.nan
+                else:
+                    # extract sample type for extended method and append to sample type list
+                    sample_types.append(extended_sample_id_data.loc[data['Sample Index'] == extended_sample_index, 'Sample Type'].unique()[0])
+
+                # make sure the sample type is the same for core method and extended method
+                if len(list(set(sample_types))) > 1:
+                    raise ImportError(
+                        f"The sample {core_sample_name} with index {core_sample_index} has a different " + \
+                        f"sample type as the sample {extended_sample_name} with index {extended_sample_index}."
+                    )
+                else:
+                    sample_type = list(set(sample_types))[0]  # save sample type variable
+
+                # append line to data frame
+                sample_list.loc[sample_number] = [
+                    sample_number, batch_name, sample_id, sample_type,
+                    core_sample_name, core_sample_index, extended_sample_name, extended_sample_index
+                    ]
+                sample_number += 1  # upcount sample number
 
     # Use sample number as index and delete column
     sample_list.index = sample_list['Sample Number']
