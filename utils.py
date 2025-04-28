@@ -43,7 +43,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
     columns_considered = [
         'Sample Index', 'Sample Name', 'Sample ID', 'Sample Type', 'Batch Name',
         'Component Name',  'Component Group Name', 'IS Name',
-        'Acquisition Date & Time', 'Used', 'IDA Average Response Factor',
+        'Acquisition Date & Time', 'Used',
         'Calculated Concentration', 'Actual Concentration',
         'Area', 'Retention Time', 'IS Retention Time',
     ]
@@ -291,7 +291,7 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selecti
     all_compounds = data['Component Name'].unique()  # all compound names
     # all columns of data frame, which are numeric and thus can be averaged
     numeric_data_columns = [
-        'IDA Average Response Factor', 'Calculated Concentration', 'Actual Concentration',
+        'Calculated Concentration', 'Actual Concentration',
         'Area', 'Retention Time', 'IS Retention Time',
         ]
     # loop over combined samples (sample number)
@@ -321,7 +321,9 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selecti
 
     return data
 
-def get_compounds_and_standards(data: pd.DataFrame, sample_list: pd.DataFrame, standard_identifiers: str) -> tuple[list, list, list, list]:
+def get_compounds_and_standards(
+        data: pd.DataFrame, sample_list: pd.DataFrame, standard_identifiers: str, eis_identifier: str, nis_identifier: str,
+        ) -> tuple[list, list, list, list]:
     """Order of PFAS compounds is conserved and the names are split to the (MS/MS) channel, and the TOF channel. If either channel is not available it is set to nan.
 
     :param data: Data frame containing merged raw data of all files.
@@ -330,6 +332,10 @@ def get_compounds_and_standards(data: pd.DataFrame, sample_list: pd.DataFrame, s
     :type sample_list: pd.DataFrame
     :param standard_identifiers: All substrings necessary to identify mass labeled internal standards from compound names.
     :type standard_identifiers: str
+    :param eis_identifier: prefix used to identify extracted internal standards (previously known as IDA)
+    :type eis_identifier: str
+    :param nis_identifier: prefix used to identify non-extracted internal standards (previously known as IPS)
+    :type nis_identifier: str
     :return: - compounds_msms: list of pfas compounds from the msms channel in the right order
              - compounds_tof: list of pfas compounds from the tof channel in the right order
              - eis_nis_msms: list of internal standards from the msms channel in the right order
@@ -369,6 +375,11 @@ def get_compounds_and_standards(data: pd.DataFrame, sample_list: pd.DataFrame, s
             skip_compounds.append(component)  # make sure the TOF compound is not considered more than once
             if component[:-7] in compounds_sorted:  # check if compound is available in corresponding MSMS channel
                 compounds_msms.append(component[:-7])  # add msms compound to MSMS list
+            # if the compound is a standard, the prefix is missing in tof channel and available in ms/ms, so check if the compound with prefix is available in msmsm channel
+            elif eis_identifier + '-' + component[:-7] in compounds_sorted:  # EIS
+                compounds_msms.append(eis_identifier + '-' + component[:-7] in coumpounds_sorted)
+            elif nis_identifier + '-' + component[:-7] in compounds_sorted:  # NIS
+                compounds_msms.append(nis_identifier + '-' + component[:-7] in coumpounds_sorted)
             else:
                 compounds_msms.append(np.nan)  # add NaN to MSMS list if corresponding msms compound is not available
             skip_compounds.append(component[:-7])    # make sure the MSMS compound is not considered more than once
@@ -377,6 +388,9 @@ def get_compounds_and_standards(data: pd.DataFrame, sample_list: pd.DataFrame, s
             skip_compounds.append(component)  # make sure the MSMS compound is not considered more than once
             if component + '_TOF MS' in compounds_sorted:  # check if compound is available in corresponding TOF channel
                 compounds_tof.append(component + '_TOF MS')  # add tof compound to TOF list
+            # if the compound is a standard, the prefix is missing in tof channel and available in ms/ms, so check if the compound without prefix is available in tof channel
+            elif component[4:] + '_TOF MS' in compounds_sorted:  # check if compound is available in corresponding TOF channel
+                compounds_tof.append(component[4:] + '_TOF MS')  # add tof compound to TOF list
             else:
                 compounds_tof.append(np.nan)  # add NaN to TOF list if corresponding tof compound is not available
             skip_compounds.append(component + '_TOF MS')  # make sure the TOF compound is not considered more than once
@@ -399,20 +413,20 @@ def get_compounds_and_standards(data: pd.DataFrame, sample_list: pd.DataFrame, s
                 eis_nis_tof.append(np.nan)  # add NaN to TOF list if corresponding tof standard is not available
         else:  # in case standard is from TOF channel
             # in case standard is an IDA (differentiatiation only possible based on MSMS, as IDA and IPS label not available in TOF channel names)
-            if 'IDA-' + standard[:-7] in eis_nis_sorted:
+            if eis_identifier + '-' + standard[:-7] in eis_nis_sorted:
                 eis_nis_tof.append(standard)  # add TOF standard to TOF list
                 skip_standards.append(standard)  # make sure the TOF standard is not considered more than once
                 if standard[4:] + '_TOF MS' in eis_nis_sorted:  # check if standard is available in corresponding TOF channel
-                    eis_nis_msms.append('IDA-' + standard[:-7])  # add MSMS standard to MSMS list
-                    skip_standards.append('IDA-' + standard[:-7])  # make sure the MSMS standard is not considered more than once
+                    eis_nis_msms.append(eis_identifier + '-' + standard[:-7])  # add MSMS standard to MSMS list
+                    skip_standards.append(eis_identifier + '-' + standard[:-7])  # make sure the MSMS standard is not considered more than once
                 else:
                     eis_nis_msms.append(np.nan)  # add NaN to TOF list if corresponding tof standard is not available
-            elif 'IPS-' + standard[:-7] in eis_nis_sorted:  # in case standard is an IPS
+            elif nis_identifier + '-' + standard[:-7] in eis_nis_sorted:  # in case standard is an IPS
                 eis_nis_tof.append(standard)  # add TOF standard to TOF list
                 skip_standards.append(standard)  # make sure the TOF standard is not considered more than once
                 if standard[4:] + '_TOF MS' in eis_nis_sorted:  # check if standard is available in corresponding TOF channel
-                    eis_nis_msms.append('IPS-' + standard[:-7])  # add MSMS standard to MSMS list
-                    skip_standards.append('IPS-' + standard[:-7])  # make sure the MSMS standard is not considered more than once
+                    eis_nis_msms.append(nis_identifier + '-' + standard[:-7])  # add MSMS standard to MSMS list
+                    skip_standards.append(nis_identifier + '-' + standard[:-7])  # make sure the MSMS standard is not considered more than once
                 else:
                     eis_nis_msms.append(np.nan)  # add NaN to TOF list if corresponding tof standard is not available
             else:
@@ -489,4 +503,7 @@ if __name__ == "__main__":
     data = clean_up_data(data=data, sample_list=sample_list, channel_selection='average')
 
     standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
-    compounds_msms, compounds_tof, ida_ips_msms, ida_ips_tof = get_compounds_and_standards(data=data, sample_list=sample_list, standard_identifiers=standard_identifiers)
+    compounds_msms, compounds_tof, ida_ips_msms, ida_ips_tof = get_compounds_and_standards(
+        data=data, sample_list=sample_list, standard_identifiers=standard_identifiers,
+        eis_identifier='IDA', nis_identifier='IPS',
+        )
