@@ -84,7 +84,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
             if extended_calibration_detected:
                 this_data = this_data.loc[this_data['Sample Type'] != 'Standard', :]
             else:
-                if len(this_data.loc[this_data['Sample Type'] != 'Standard', :]) > 1000:
+                if len(this_data.loc[this_data['Sample Type'] == 'Standard', :]) > 500:
                     extended_calibration_detected = True
 
         elif batch_type == 'core':
@@ -94,7 +94,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
             if core_calibration_detected:
                 this_data = this_data.loc[this_data['Sample Type'] != 'Standard', :]
             else:
-                if len(this_data.loc[this_data['Sample Type'] != 'Standard', :]) > 1000:
+                if len(this_data.loc[this_data['Sample Type'] == 'Standard', :]) > 500:
                     core_calibration_detected = True
         else:
             raise NameError(
@@ -149,73 +149,76 @@ def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
         for batch_name in batch_names:
             # extract data for batch and get all names for related samples
             sample_id_batch_data = sample_id_data.loc[data['Batch Name'] == batch_name,:]
-            sample_names = sample_id_batch_data['Sample Name'].unique()
-            # get core sample names for related sample ID from related bath
-            core_sample_names = [sample_name for sample_name in sample_names if 'Core' in sample_name]
-            # Throw error if there is more than one sample ending with 'Core' for current sample_id in loop
-            if len(core_sample_names) > 1:
-                ImportError(f"You cannot have more than one sample names ending with Ext for the Sample ID {sample_id}. Check your raw data.")
-            # Set core sample name to np.nan if it does not exist for current sample_id in loop
-            elif len(core_sample_names) == 0:
-                core_sample_name = np.nan
-                core_sample_indices = []  # initialize core sample indices
-            # Set core sample name variable to the available sample name for the extended method if it does exist for sample id in loop.
-            else:
-                core_sample_name = core_sample_names[0]
-                # extract data for core method related to sample ID and get all sample indices running under the same sample name
-                core_sample_id_data = sample_id_batch_data.loc[data['Sample Name'] == core_sample_name, :]
-                core_sample_indices = core_sample_id_data['Sample Index'].unique()
+            sample_types = sample_id_batch_data['Sample Type'].unique()
+            for sample_type in sample_types:
+                sample_id_batch_type_data = sample_id_batch_data.loc[data['Sample Type'] == sample_type,:]
+                sample_names = sample_id_batch_type_data['Sample Name'].unique()
+                # get core sample names for related sample ID from related bath
+                core_sample_names = [sample_name for sample_name in sample_names if sample_name[-4:] == "Core"]
+                extended_sample_names = [sample_name for sample_name in sample_names if sample_name[-3:] == "Ext"]
+                # iterate over core sample names
+                for core_sample_name in core_sample_names:
+                    # get data of core sample name (and batch type and id)
+                    core_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[data['Sample Name'] == core_sample_name, :]
+                    # get all indices of core samples name (and batch type and id)
+                    core_sample_indices = core_sample_id_batch_type_name_data['Sample Index'].unique()
+                    # get name of extended sample to pair with
+                    extended_sample_name = core_sample_name[:-4] + 'Ext'
+                    # drop extended sample from extended sample name list because it is already treated here
+                    extended_sample_names = [sample_name for sample_name in extended_sample_names if sample_name != extended_sample_name]
+                    # get data of extended sample to pair with 
+                    extended_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[data['Sample Name'] == extended_sample_name, :]
+                    # get all possible indices of extended samples to pair with
+                    extended_sample_indices = extended_sample_id_batch_type_name_data['Sample Index'].unique()
 
-            # extract data for extended samples and get core sample names and indices for related sample ID
-            extended_sample_names = [sample_name for sample_name in sample_names if 'Ext' in sample_name]
-            # Throw error if there is more than one sample ending with 'Ext' for current sample_id in loop
-            if len(extended_sample_names) > 1:
-                ImportError(f"You cannot have more than one sample names ending with Ext for the Sample ID {sample_id}. Check your raw data.")
-            # Set extended sample name to np.nan if it does not exist for current sample_id in loop
-            elif len(extended_sample_names) == 0:
-                extended_sample_name = np.nan
-                extended_sample_indices = []  # initialize extended sample indices
-            # Set extended sample name variable to the available sample name for the extended method if it does exist for sample id in loop.
-            else:
-                extended_sample_name = extended_sample_names[0]
-                # extract data for extended method related to sample ID and get all sample indices running under the same sample name
-                extended_sample_id_data = sample_id_batch_data.loc[data['Sample Name'] == extended_sample_name, :]
-                extended_sample_indices = extended_sample_id_data['Sample Index'].unique()
+                    # iterate over core sample indices
+                    for core_sample_index in core_sample_indices:
+                        # if there is an extended sample to pair with, do it and delete corresponding data from extended sample data to pair with
+                        if len(extended_sample_indices) > 0:
+                            # get index
+                            extended_sample_index = extended_sample_indices[0]
+                            # drop data of index from sub data frame
+                            extended_sample_indices = [sample_index for sample_index in extended_sample_indices if sample_index != extended_sample_index]
+                            # save sample to sample list
+                            sample_list.loc[sample_number] = [
+                                sample_number, batch_name, sample_id, sample_type,
+                                core_sample_name, core_sample_index, extended_sample_name, extended_sample_index
+                                ]
+                        else:
+                            # save core sample without extended pairing to sample list
+                            sample_list.loc[sample_number] = [
+                                sample_number, batch_name, sample_id, sample_type,
+                                core_sample_name, core_sample_index, np.nan, np.nan
+                                ]
+                        # count up sample number
+                        sample_number += 1
 
-            # loop over all indices from core and extended and append sample number with all information to sample list
-            for (core_sample_index, extended_sample_index) in zip_longest(core_sample_indices, extended_sample_indices, fillvalue=np.nan):
-                
-                # initialize sample types list
-                sample_types = []
-                
-                # check if core sample is available, set name to nan if not
-                if np.isnan(core_sample_index):
-                    core_sample_name = np.nan
-                else:
-                    # extract sample type for core method and append to sample type list
-                    sample_types.append(core_sample_id_data.loc[data['Sample Index'] == core_sample_index, 'Sample Type'].unique()[0])
+                    # write unpaired extended data to sample list
+                    for extended_sample_index in extended_sample_indices:
+                        sample_list.loc[sample_number] = [
+                                sample_number, batch_name, sample_id, sample_type,
+                                np.nan, np.nan, extended_sample_name, extended_sample_index
+                                ]
+                        # count up sample number
+                        sample_number += 1
 
-                if np.isnan(extended_sample_index):
-                    extended_sample_name = np.nan
-                else:
-                    # extract sample type for extended method and append to sample type list
-                    sample_types.append(extended_sample_id_data.loc[data['Sample Index'] == extended_sample_index, 'Sample Type'].unique()[0])
+                # iterate over remaining extended sample names
+                for extended_sample_name in extended_sample_names:
+                    # get data of extended sample name (and batch type and id)
+                    extended_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[data['Sample Name'] == extended_sample_name, :]
+                    # get all indices of extended samples name (and batch type and id)
+                    extended_sample_indices = extended_sample_id_batch_type_name_data['Sample Index'].unique()
 
-                # make sure the sample type is the same for core method and extended method
-                if len(list(set(sample_types))) > 1:
-                    raise ImportError(
-                        f"The sample {core_sample_name} with index {core_sample_index} has a different " + \
-                        f"sample type as the sample {extended_sample_name} with index {extended_sample_index}."
-                    )
-                else:
-                    sample_type = list(set(sample_types))[0]  # save sample type variable
+                    # iterate over extended sample indices
+                    for extended_sample_index in extended_sample_indices:
+                        # save core sample without extended pairing to sample list
+                        sample_list.loc[sample_number] = [
+                            sample_number, batch_name, sample_id, sample_type,
+                            np.nan, np.nan, extended_sample_name, extended_sample_index, 
+                            ]
+                        # count up sample number
+                        sample_number += 1
 
-                # append line to data frame
-                sample_list.loc[sample_number] = [
-                    sample_number, batch_name, sample_id, sample_type,
-                    core_sample_name, core_sample_index, extended_sample_name, extended_sample_index
-                    ]
-                sample_number += 1  # upcount sample number
 
     # Use sample number as index and delete column
     sample_list.index = sample_list['Sample Number']
@@ -263,20 +266,17 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selecti
     # iterate over data rows
     for (row_index, row_data) in data.iterrows():
         # get sample id, sample index and sample name from current row
-        sample_id = row_data['Sample ID']
         sample_index = row_data['Sample Index']
         sample_name = row_data['Sample Name']
         # if the sample is from the core method get the sample number from the core sample index
-        if "Core" in sample_name:
+        if sample_name[-4:] == "Core":
             sample_number = sample_list.loc[(
-                (sample_list['Sample ID']==sample_id) & 
                 (sample_list['Sample Name Core']==sample_name) & 
                 (sample_list['Sample Index Core']==sample_index)
                     ),:].index
         # if the sample is from the extended method get the sample number from the extended sample index
-        elif "Ext" in sample_name:
+        elif sample_name[-3:] == "Ext":
             sample_number = sample_list.loc[(
-                (sample_list['Sample ID']==sample_id) & 
                 (sample_list['Sample Name Extended']==sample_name) & 
                 (sample_list['Sample Index Extended']==sample_index)
                 ),:].index
@@ -348,20 +348,15 @@ def get_compounds_and_standards(
     sample_rows = sample_list.loc[((~np.isnan(sample_list['Sample Index Core'])) & ((~np.isnan(sample_list['Sample Index Extended'])))), :].index
     # choose first sample from full sample list if only one method either core or extended is available for all samples
     if len(sample_rows) == 0:
-        sample_rows = 0
+        sample_row = 0
     else:
         # get first sample where both methods are available in case that's possible
         sample_row = sample_rows[0]
 
-    # get indices of core and exteded method sample of the selected sample
-    [sample_index_core, sample_index_extended] = sample_list.loc[sample_row, ['Sample Index Core', 'Sample Index Extended']]
-    sample_indices = [int(sample_index) for sample_index in [sample_index_core, sample_index_extended] if not np.isnan(sample_index)] # delete np.NaNs
-
     # get list of all compound names considered
-    compounds_filtered = data.loc[data['Sample Index'].isin(sample_indices), 'Component Name']
+    compounds_filtered = data.loc[data['Sample Index'] == sample_row, 'Component Name']
     compounds_sorted = compounds_filtered[~compounds_filtered.str.contains(standard_identifiers)].to_list()  # channel names excluding IPS and IDA
     eis_nis_sorted = compounds_filtered[compounds_filtered.str.contains(standard_identifiers)].to_list()  # channel names excluding IPS and IDA
-    
     # initialize lists
     compounds_msms = []  # msms compounds
     compounds_tof = []  # tof compounds
@@ -375,11 +370,6 @@ def get_compounds_and_standards(
             skip_compounds.append(component)  # make sure the TOF compound is not considered more than once
             if component[:-7] in compounds_sorted:  # check if compound is available in corresponding MSMS channel
                 compounds_msms.append(component[:-7])  # add msms compound to MSMS list
-            # if the compound is a standard, the prefix is missing in tof channel and available in ms/ms, so check if the compound with prefix is available in msmsm channel
-            elif eis_identifier + '-' + component[:-7] in compounds_sorted:  # EIS
-                compounds_msms.append(eis_identifier + '-' + component[:-7] in coumpounds_sorted)
-            elif nis_identifier + '-' + component[:-7] in compounds_sorted:  # NIS
-                compounds_msms.append(nis_identifier + '-' + component[:-7] in coumpounds_sorted)
             else:
                 compounds_msms.append(np.nan)  # add NaN to MSMS list if corresponding msms compound is not available
             skip_compounds.append(component[:-7])    # make sure the MSMS compound is not considered more than once
@@ -388,9 +378,6 @@ def get_compounds_and_standards(
             skip_compounds.append(component)  # make sure the MSMS compound is not considered more than once
             if component + '_TOF MS' in compounds_sorted:  # check if compound is available in corresponding TOF channel
                 compounds_tof.append(component + '_TOF MS')  # add tof compound to TOF list
-            # if the compound is a standard, the prefix is missing in tof channel and available in ms/ms, so check if the compound without prefix is available in tof channel
-            elif component[4:] + '_TOF MS' in compounds_sorted:  # check if compound is available in corresponding TOF channel
-                compounds_tof.append(component[4:] + '_TOF MS')  # add tof compound to TOF list
             else:
                 compounds_tof.append(np.nan)  # add NaN to TOF list if corresponding tof compound is not available
             skip_compounds.append(component + '_TOF MS')  # make sure the TOF compound is not considered more than once
@@ -498,7 +485,7 @@ def round_to_n_sigfigs(x: float, n: int) -> float:
 
 
 if __name__ == "__main__":
-    data = read_in_data_files(project_folder='test')
+    data = read_in_data_files(project_folder='rachel')
     sample_list = get_sample_id_and_name(data=data)
     data = clean_up_data(data=data, sample_list=sample_list, channel_selection='average')
 
