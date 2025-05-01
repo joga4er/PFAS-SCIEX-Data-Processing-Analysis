@@ -256,11 +256,15 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selecti
     
     # Correct channel names in original data (all of the TOF channels are labelled by _TOF MS, only 2 of them are labeled by only _TOF)
     mask_names = data['Component Name'].str.endswith('_TOF')
-    data.loc[data['Component Name'].str.endswith('_TOF'), 'Component Name'] = [compound + ' MS' for compound in data['Component Name'][mask_names].to_list()]
+    data.loc[mask_names, 'Component Name'] = [compound + ' MS' for compound in data.loc[mask_names, 'Component Name'].to_list()]
 
     # some have an underscore between TOF and MS, this is removed
     mask_names = data['Component Name'].str.endswith('_TOF_MS')
-    data.loc[data['Component Name'].str.endswith('_TOF_MS'), 'Component Name'] = [compound[:-3] + ' MS' for compound in data['Component Name'][mask_names].to_list()]
+    data.loc[mask_names, 'Component Name'] = [compound[:-3] + ' MS' for compound in data.loc[mask_names, 'Component Name'].to_list()]
+
+    # some have an underscore between TOF and MS, this is removed
+    mask_names = data['Component Name'].str.endswith(' _TOF MS')
+    data.loc[mask_names, 'Component Name'] = [compound[:-8] + '_TOF MS' for compound in data.loc[mask_names, 'Component Name'].to_list()]
 
     # reset sample index from raw data with corresponding sample number from sample list
     # iterate over data rows
@@ -323,7 +327,7 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selecti
 
 def get_compounds_and_standards(
         data: pd.DataFrame, sample_list: pd.DataFrame, standard_identifiers: str, eis_identifier: str, nis_identifier: str,
-        ) -> tuple[list, list, list, list]:
+        ) -> tuple[list, list, list, list, list, list, list, list]:
     """Order of PFAS compounds is conserved and the names are split to the (MS/MS) channel, and the TOF channel. If either channel is not available it is set to nan.
 
     :param data: Data frame containing merged raw data of all files.
@@ -340,7 +344,11 @@ def get_compounds_and_standards(
              - compounds_tof: list of pfas compounds from the tof channel in the right order
              - eis_nis_msms: list of internal standards from the msms channel in the right order
              - eis_nis_tof: list of internal standards from the tof channel in the right order
-    :rtype: tuple[list, list, list, list]
+             - eis_msms: list of extracted internal standards from the msms channel in the right order
+             - eis_tof: list of extracted internal standards from the tof channel in the right order
+             - nis_msms: list of non-extracted internal standards from the msms channel in the right order
+             - nis_tof: list of non-extracted internal standards from the tof channel in the right order
+    :rtype: tuple[list, list, list, list, list, list, list, list]
     """
 
     # find suitable sample to iterate over compound names
@@ -419,7 +427,21 @@ def get_compounds_and_standards(
             else:
                 print(f'The standard: {standard} has no corresponding IDA or IPS in the default MS channel. It is ignored in the following calculations.')
 
-    return compounds_msms, compounds_tof, eis_nis_msms, eis_nis_tof
+    # seperate standard list into nis and eis accordingly
+    eis_msms = []  # initialize extracted internal standard list of msms channel
+    eis_tof = []  # initialize extracted internal standard list of tof channel
+    nis_msms = []  # initialize non-extracted internal standard list of msms channel
+    nis_tof = []  # initialize non-extracted internal standard list of tof channel
+    for (is_msms, is_tof) in zip(eis_nis_msms, eis_nis_tof):
+        identifier = is_msms[:3]
+        if identifier == nis_identifier:
+            nis_msms.append(is_msms)
+            nis_tof.append(is_tof)
+        elif identifier == eis_identifier:
+            eis_msms.append(is_msms)
+            eis_tof.append(is_tof)
+
+    return compounds_msms, compounds_tof, eis_nis_msms, eis_nis_tof, eis_msms, eis_tof, nis_msms, nis_tof
 
 def parse_project_folder_structure(project_folder: str) -> None:
     """Checks if project folder matches given structure
@@ -483,14 +505,32 @@ def round_to_n_sigfigs(x: float, n: int) -> float:
         return np.nan
     return round(x, -int(floor(log10(abs(x)))) + (n - 1))
 
+def reassign_tof_nis_to_eis(data: pd.DataFrame) -> pd.DataFrame:
+    """Inputs correctly assigned NIS in column 'Component Group Name' for all EIS of the TOF channel.
+    Assigment is based on the csv input file nis_to_eis_assignment.csv located in the lab_folders_directory.
+    If needed change accordingly.
+
+    :param data: Data frame containing merged raw data of all files.
+    :type data: pd.DataFrame
+    :return: Data Frame with corrected column 'Component Group Name' for all EIS of TOF channels
+    :rtype: pd.DataFrame
+    """    
+    assignment = pd.read_csv(os.path.join('lab_parameters', 'nis_to_eis_assignment.csv'))
+    eis_compounds = assignment['eis compound'].to_list()
+    related_nis_compounds = assignment['nis compound'].to_list()
+    for (eis_tof_compound, related_nis_tof_compound) in zip(eis_compounds, related_nis_compounds):
+        data.loc[data['Component Name']==eis_tof_compound, 'Component Group Name'] = related_nis_tof_compound
+    return data
+
 
 if __name__ == "__main__":
-    data = read_in_data_files(project_folder='rachel')
+    data = read_in_data_files(project_folder='test')
     sample_list = get_sample_id_and_name(data=data)
     data = clean_up_data(data=data, sample_list=sample_list, channel_selection='average')
+    data = reassign_tof_nis_to_eis(data)
 
     standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
-    compounds_msms, compounds_tof, ida_ips_msms, ida_ips_tof = get_compounds_and_standards(
+    compounds_msms, compounds_tof, ida_ips_msms, ida_ips_tof, _, _, _, _ = get_compounds_and_standards(
         data=data, sample_list=sample_list, standard_identifiers=standard_identifiers,
         eis_identifier='IDA', nis_identifier='IPS',
         )
