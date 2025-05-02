@@ -3,8 +3,10 @@ example_figures/*
 example_data_processed/*
 .ipynb_checkpoints/*
 .vscode/*
-example_data_raw/*
-!example_data_raw/241031_test_data_core.txt
-!example_data_raw/241031_test_data_extended.txt
-!example_data_raw/linking_data_input/
-
+__pycache__/*
+taylor
+rachel
+kelsey
+julie
+test/processed_data
+test/code_parameters

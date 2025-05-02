@@ -1,18 +1,18 @@
 # 1 Data Analysis Pipeline for targeted LCMS Analysis (data_analysis.ipynb)
 Jupyter notebook (python based), which takes raw liquit chromatography mass spectroscopy (LCMS) data (exported table from SCIEX Analyst Software),
-computes recovery rates, method detection limits, and ratios of default channel to MS TOF channel.
-Generates plots and writes results to excel and creates long format table (.csv) for data publications.
+computes retention time differences (RTD), method detection limits, recovery rates (RR), and ion abundance ratios.
+Generates plots, flags concentration values according to QAQC criteria, and writes results to excel. Creates long format table (.csv) for data publications.
 The analysis is targeted at the precedure of the Lohmann lab located at University of Rhode Island at the graduate school of oceanography.
 
-### Guidelines/Workflow
-Collect all needed input data in a project directory of your choice and indicate the paths to your input data in the first code block of the script xx_xx_xxxx_data_analysis.ipynb. Decide where the result of the analysis should be saved to and indicate all result paths in the first code block.
+### Workflow
+Collect all input data in a project directory of your choice and run the script **create_project_folder.ipynb**, which creates templates for your input parameters (sample_parameters.csv, recovery_thresholds.csv and simulation_parameters.csv) based on sample and compound names extracted from your raw data.
+You find detailed instructions in the notebook itself.
 
-When you run the script for the first time a .csv file will be created to input relevant information of your samples like volume and final desired concentration units. Once you provided all the information save the file, close it and run the script again.
+Once you set all input parameters accordingly, make sure you use the right path as project folder and run the script **data_analysis.ipynb**.
 
-##### input data
-- exported data from Sciex Analyst software. The filename has to end either with '_core' for results originating from the core method, or with '_extended' for results originating from the extended method.
-- .csv table containing the instrumentation detection limits for all PFAS components analyzed.
-- a test data set is available in the directory example_data_raw
+##### input data and filenameing conventions
+- exported data from Sciex Analyst software. The filename has to end either with '_core' for results originating from the core method, or with '_extended' for results originating from the extended method. The batches to be combined must have the same base name before the fileending: e.g. batch_1_core.txt, and batch_1_extended.txt.
+- a test data set is available in the test project folder "test".
 
 ##### software
 To run the jupyter notebook, you will need any kind of integrated code environment (IDE).
