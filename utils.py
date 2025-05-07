@@ -473,9 +473,14 @@ def parse_project_folder_structure(project_folder: str) -> None:
             "There is no subfolder 'code_parameters' in your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
-    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'recovery_thresholds.csv')):
+    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'retention_time_and_iar_thresholds.csv')):
         raise ImportError(
-            "There is no recovery_thresholds.csv in code_parameters or your project folder." \
+            "There is no retention_time_and_iar_thresholds.csv in code_parameters or your project folder." \
+            "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
+            )
+    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'recovery_or_standard_response_thresholds.csv')):
+        raise ImportError(
+            "There is no recovery_or_standard_response_thresholds.csv in code_parameters or your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
     if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'sample_parameters.csv')):
