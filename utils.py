@@ -59,7 +59,8 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
     # iterate over all files in project folder
     for file in raw_data_files_list:
         # extract relevant information from file
-        [base_name, file_ending] = file.split(".")
+        base_name = ".".join(file.split(".")[:-1])
+        file_ending = file.split(".")[-1]
         batch_name = "_".join(base_name.split("_")[:-1])
         batch_type = base_name.split("_")[-1]
 
@@ -116,8 +117,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
             data = pd.concat([data, this_data[columns_considered]], ignore_index=True)  # append to data
 
     # Only work with data, which is 'Used' -> Relevant for Calibration, where some of the calibration points are excluded for some compounds
-    data = data.loc[data['Used'], :]
-    data.drop('Used', axis=1, inplace=True)
+    data.loc[~data['Used'],  ['Calculated Concentration', 'Actual Concentration', 'Area', 'Retention Time', 'IS Retention Time']] = np.nan
     
     return data
 
