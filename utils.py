@@ -4,8 +4,10 @@
 import pandas as pd
 import os
 import numpy as np
-from itertools import zip_longest
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 from math import log10, floor
+from typing import Optional
 
 # functions
 def read_in_data_files(project_folder: str) -> pd.DataFrame:
@@ -57,7 +59,8 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
     # iterate over all files in project folder
     for file in raw_data_files_list:
         # extract relevant information from file
-        [base_name, file_ending] = file.split(".")
+        base_name = ".".join(file.split(".")[:-1])
+        file_ending = file.split(".")[-1]
         batch_name = "_".join(base_name.split("_")[:-1])
         batch_type = base_name.split("_")[-1]
 
@@ -114,8 +117,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
             data = pd.concat([data, this_data[columns_considered]], ignore_index=True)  # append to data
 
     # Only work with data, which is 'Used' -> Relevant for Calibration, where some of the calibration points are excluded for some compounds
-    data = data.loc[data['Used'], :]
-    data.drop('Used', axis=1, inplace=True)
+    data.loc[~data['Used'],  ['Calculated Concentration', 'Actual Concentration', 'Area', 'Retention Time', 'IS Retention Time']] = np.nan
     
     return data
 
@@ -251,7 +253,7 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selecti
     # set all strange strings to NaN
     # set '<1 points' and '< 0' to 0
     data['Calculated Concentration'] = data['Calculated Concentration'].replace(
-        {'<1 points': 0, '< 0': 0, 'no root': np.nan, 'NaN': np.nan, 'degenerate': np.nan,}
+        {'<1 points': 0, '< 0': 0, 'no root': np.nan, 'NaN': np.nan, 'degenerate': np.nan, 'two roots': np.nan}
         ).astype('float')
     
     # Correct channel names in original data (all of the TOF channels are labelled by _TOF MS, only 2 of them are labeled by only _TOF)
@@ -443,6 +445,41 @@ def get_compounds_and_standards(
 
     return compounds_msms, compounds_tof, eis_nis_msms, eis_nis_tof, eis_msms, eis_tof, nis_msms, nis_tof
 
+def get_eis_for_pfas(data: pd.DataFrame, sample_list: pd.DataFrame, pfas_compounds: list[str]) -> list[str]:
+    """Returns list of internal standards corresponsing to input list of pfas_compounds in the corresponding order.
+
+    ::param data: Data frame containing merged raw data of all files.
+    :type data: pd.DataFrame
+    :param sample_list: Data frame containing all samples occuring in raw data.
+    :type sample_list: pd.DataFrame
+    :param pfas_compounds: list of native PFAS compounds you want the related extracted internal standards for.
+    :type pfas_compounds: list[str]
+    :return: List of extracted internal standards corresponding to the native pfas compounds in the order of the input list.
+    :rtype: list[str]
+    """    
+    # find suitable sample to iterate over compound names
+    # get all samples where both methods core and extended are available
+    sample_rows = sample_list.loc[((~np.isnan(sample_list['Sample Index Core'])) & ((~np.isnan(sample_list['Sample Index Extended'])))), :].index
+    # choose first sample from full sample list if only one method either core or extended is available for all samples
+    if len(sample_rows) == 0:
+        sample_row = 0
+    else:
+        # get first sample where both methods are available in case that's possible
+        sample_row = sample_rows[0]
+
+    example_data = data.loc[data['Sample Index'] == sample_row, ['Component Name', 'IS Name']]
+    eis = []
+
+    for native_pfas in pfas_compounds:
+        eis_correlated = example_data.loc[example_data['Component Name'] == native_pfas, 'IS Name']
+        if len(eis_correlated) >= 1:
+            eis.append(example_data.loc[example_data['Component Name'] == native_pfas, 'IS Name'].to_list()[0])
+        else:
+            eis.append(np.nan)
+
+    return eis
+
+
 def parse_project_folder_structure(project_folder: str) -> None:
     """Checks if project folder matches given structure
 
@@ -473,9 +510,14 @@ def parse_project_folder_structure(project_folder: str) -> None:
             "There is no subfolder 'code_parameters' in your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
-    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'recovery_thresholds.csv')):
+    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'retention_time_and_iar_thresholds.csv')):
         raise ImportError(
-            "There is no recovery_thresholds.csv in code_parameters or your project folder." \
+            "There is no retention_time_and_iar_thresholds.csv in code_parameters or your project folder." \
+            "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
+            )
+    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'recovery_or_standard_response_thresholds.csv')):
+        raise ImportError(
+            "There is no recovery_or_standard_response_thresholds.csv in code_parameters or your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
     if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'sample_parameters.csv')):
@@ -522,6 +564,76 @@ def reassign_tof_nis_to_eis(data: pd.DataFrame) -> pd.DataFrame:
         data.loc[data['Component Name']==eis_tof_compound, 'Component Group Name'] = related_nis_tof_compound
     return data
 
+def change_worksheet_color(filepath: str, sheetnames: list[str], color: str) -> None:
+    """changes color of worksheet description
+
+    :param filepath: Filepath of excelfiles
+    :type filepath: str
+    :param sheetnames: List of sheet names which are coloured
+    :type sheetnames: list[str]
+    :param color: Colour in RRGGBB Code
+    :type color: str
+    """    
+    workbook = load_workbook(filepath)
+    for sheet_name in sheetnames:
+        workbook[sheet_name].sheet_properties.tabColor = color
+    workbook.save(filepath)
+    workbook.close()
+
+def color_fields(
+        filepath: str, sheetname: str, rtd: pd.DataFrame, bdl: Optional[pd.DataFrame] = None,
+        rr: Optional[pd.DataFrame] = None, iard: Optional[pd.DataFrame] = None
+        ) -> None:
+
+    workbook = load_workbook(filepath)
+    sheet = workbook[sheetname]
+
+    # 3. Define fills
+    rtd_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+    bdl_fill = PatternFill(start_color="FF8000", end_color="FF8000", fill_type="solid")
+    rr_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    iard_fill = PatternFill(start_color="7F00FF", end_color="7F00FF", fill_type="solid")
+
+    # 4. Apply coloring based on boolean dataframes
+    for row_idx in range(rtd.shape[0]):
+        for col_idx in range(rtd.shape[1]):
+            excel_row = row_idx + 2  # +2 because Excel rows start at 1, and row 1 is the header
+            excel_col = col_idx + 2  # +2 because Excel column start at 1, and column 1 is the index
+
+            cell = sheet.cell(row=excel_row, column=excel_col)
+
+            if rtd.iloc[row_idx, col_idx]:
+                cell.fill = rtd_fill
+                continue
+            if bdl is not None:
+                if bdl.iloc[row_idx, col_idx]:
+                    cell.fill = bdl_fill
+                    continue
+            if rr is not None:
+                if rr.iloc[row_idx, col_idx]:
+                    cell.fill = rr_fill
+                    continue
+            if iard is not None:
+                if iard.iloc[row_idx, col_idx]:
+                    cell.fill = iard_fill
+                    continue
+
+    # 5. IARD contains internal standards too, make sure they are flagged accordingly.
+    if iard is not None:
+        for row_idx in range(rtd.shape[0]):
+            for col_idx in range(rtd.shape[1], iard.shape[1]):
+
+                excel_row = row_idx + 2  # +2 because Excel rows start at 1, and row 1 is the header
+                excel_col = col_idx + 2  # +2 because Excel column start at 1, and column 1 is the index
+
+                cell = sheet.cell(row=excel_row, column=excel_col)
+
+                if iard.iloc[row_idx, col_idx]:
+                    cell.fill = iard_fill
+
+    # 5. Save changes
+    workbook.save(filepath)
+    workbook.close()
 
 if __name__ == "__main__":
     data = read_in_data_files(project_folder='test')
