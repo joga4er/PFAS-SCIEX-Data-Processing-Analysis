@@ -470,9 +470,8 @@ def get_tof_and_msms_standards(
             skip_standards.append(standard)  # make sure the MSMS standard is not considered more than once
 
     standards = pd.DataFrame(standards)
-    standards.to_csv('standards.csv')
     delete_standards = pd.DataFrame(delete_standards)
-    delete_standards.to_csv('delete_standards.csv')
+
     return standards, delete_standards
 
 def get_eis_for_pfas(data: pd.DataFrame, sample_list: pd.DataFrame, pfas_compounds: list[str]) -> list[str]:
