@@ -101,7 +101,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
                     core_calibration_detected = True
         else:
             raise NameError(
-                f"The file {raw_data_file_name} does not comply with file naming conventions." + \
+                f"The file {file} does not comply with file naming conventions." + \
                 "Read the instructions for details regarding the filenaming conventions."
                 )
         
@@ -221,35 +221,26 @@ def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
                         # count up sample number
                         sample_number += 1
 
-
-    # Use sample number as index and delete column
-    sample_list.index = sample_list['Sample Number']
-    sample_list.drop('Sample Number', axis=1, inplace=True)
-
     return sample_list
 
-def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selection: str) -> pd.DataFrame:
+def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame) -> pd.DataFrame:
     """Performs major cleanup steps for raw data:
      (i) replace strings in concentration with np.nan or 0.
      (ii) correct patterns of TOF MS channel names
-     (iii) reset sample index from raw data with sample number (combining core and extended method)
-     (iv) replace duplicate compounds (from comination of core method and extended method) with either
-     compounds from core method only, compounds from extended method only, or average of compounds from both methods.
 
     :param data: Data frame containing merged raw data of all files.
     :type data: pd.DataFrame
     :param sample_list: Data frame containing all samples occuring in raw data. One row combines samples from core method and extended method.
     :type sample_list: pd.DataFrame
-    :param channel_selection: For some cases, when using both core and extended method, some compounds in the TOF channels are avaialbe twice within the same sample.
-        Set channel_selection to 'core' if you want to use the channel from the core method for further caluclations.
-        Set channel_selection to 'extended' if you want to use the channel from the extended method for further calculations.
-        Set channel_selection to 'average' if you want to use the average of both channels for further calculations.
     :type channel_selection: str
     :return: Cleaned up data.
     :rtype: pd.DataFrame
     """    
-    
+    # TODO make NaNs to zeros and convert zeros to ND at a later stage
+
     # Clean up 'Calculated Concentration' column
+    # first set all NAN values (originally None for non-detect) to zero
+    data.loc[data['Calculated Concentration'].isnull(), 'Calculated Concentration'] = 0
     # set all strange strings to NaN
     # set '<1 points' and '< 0' to 0
     data['Calculated Concentration'] = data['Calculated Concentration'].replace(
@@ -268,7 +259,10 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selecti
     mask_names = data['Component Name'].str.endswith(' _TOF MS')
     data.loc[mask_names, 'Component Name'] = [compound[:-8] + '_TOF MS' for compound in data.loc[mask_names, 'Component Name'].to_list()]
 
-    # reset sample index from raw data with corresponding sample number from sample list
+    data.loc[:,'Sample Number'] = [np.nan] * len(data)
+
+    # introduce column sample number and save right sample number to each sample
+    # sample number corresponds to unique index for combination of core and extended, while sample index is unique for every injection
     # iterate over data rows
     for (row_index, row_data) in data.iterrows():
         # get sample id, sample index and sample name from current row
@@ -286,51 +280,20 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame, channel_selecti
                 (sample_list['Sample Name Extended']==sample_name) & 
                 (sample_list['Sample Index Extended']==sample_index)
                 ),:].index
-        # reset sample index with sample number
-        data.loc[row_index, 'Sample Index'] = sample_number
-
-    # Due to the merging of data from core method and extended method some pfas compounds may occur twice in the same sample.
-    # The following code block removes duplicates by either deleting all duplicates from the core method, deleting all duplicates from the extended method,
-    # or using average from core and extended method
-
-    # initialize lists before going into the loop
-    all_compounds = data['Component Name'].unique()  # all compound names
-    # all columns of data frame, which are numeric and thus can be averaged
-    numeric_data_columns = [
-        'Calculated Concentration', 'Actual Concentration',
-        'Area', 'Retention Time', 'IS Retention Time',
-        ]
-    # loop over combined samples (sample number)
-    for sample_number in sample_list.index:
-        # extract data for the sample of concern
-        sample_number_data = data.loc[data['Sample Index'] == sample_number, :]
-        # delete duplicate compounds from the extended method if 'core' is the channel_selection
-        if channel_selection == 'core':
-            extended_duplicate_compounds = sample_number_data.loc[
-                ((sample_number_data['Component Name'].duplicated(keep=False))&(sample_number_data['Sample Name'].str.contains('Ext'))),:
-            ].index
-            data.drop(extended_duplicate_compounds, axis='index', inplace=True)
-        # delete duplicate compounds from the core method if 'extended' is the channel_selection
-        elif channel_selection == 'extended':
-            core_duplicate_compounds = sample_number_data.loc[
-                ((sample_number_data['Component Name'].duplicated(keep=False))&(sample_number_data['Sample Name'].str.contains('Core'))),:
-            ].index
-            data.drop(core_duplicate_compounds, axis='index', inplace=True)
-
-        # loop over all compounds, calculate average over duplicates replace first duplicate with average and delete all other duplicates
-        elif channel_selection == 'average':
-            for compound in all_compounds:
-                sample_number_data_compound = sample_number_data.loc[sample_number_data['Component Name']==compound, :]
-                if len(sample_number_data_compound.index > 1):
-                    data.loc[sample_number_data_compound.index[0], numeric_data_columns] = sample_number_data_compound[numeric_data_columns].mean()
-                    data.drop(sample_number_data_compound.index[1:], axis='index', inplace=True)
+        else:
+            raise NameError(
+                f'Sample with name {sample_name} is not available in sample list. You might have to rerun create_project_folder.ipynb'
+                )
+        # set column sample number
+        data.loc[row_index, 'Sample Number'] = sample_number
 
     return data
 
-def get_compounds_and_standards(
-        data: pd.DataFrame, sample_list: pd.DataFrame, standard_identifiers: str, eis_identifier: str, nis_identifier: str,
-        ) -> tuple[list, list, list, list, list, list, list, list]:
-    """Order of PFAS compounds is conserved and the names are split to the (MS/MS) channel, and the TOF channel. If either channel is not available it is set to nan.
+def get_tof_and_msms_compounds(
+        data: pd.DataFrame, sample_list: pd.DataFrame, standard_identifiers: str,
+        ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Order of PFAS compounds is conserved and the names are split to the (MS/MS) channel, and the TOF channel. If either channel is not available or available twice,
+    it is saved to a dataframe meant to delete compounds at a later stage.
 
     :param data: Data frame containing merged raw data of all files.
     :type data: pd.DataFrame
@@ -338,112 +301,179 @@ def get_compounds_and_standards(
     :type sample_list: pd.DataFrame
     :param standard_identifiers: All substrings necessary to identify mass labeled internal standards from compound names.
     :type standard_identifiers: str
-    :param eis_identifier: prefix used to identify extracted internal standards (previously known as IDA)
-    :type eis_identifier: str
-    :param nis_identifier: prefix used to identify non-extracted internal standards (previously known as IPS)
-    :type nis_identifier: str
-    :return: - compounds_msms: list of pfas compounds from the msms channel in the right order
-             - compounds_tof: list of pfas compounds from the tof channel in the right order
-             - eis_nis_msms: list of internal standards from the msms channel in the right order
-             - eis_nis_tof: list of internal standards from the tof channel in the right order
-             - eis_msms: list of extracted internal standards from the msms channel in the right order
-             - eis_tof: list of extracted internal standards from the tof channel in the right order
-             - nis_msms: list of non-extracted internal standards from the msms channel in the right order
-             - nis_tof: list of non-extracted internal standards from the tof channel in the right order
-    :rtype: tuple[list, list, list, list, list, list, list, list]
+    :return: - compounds: Dataframe containing compounds in right order and the information of which method is used to extract the information from.
+             - delete_compounds: Dataframe containing compounds which should be deleted, because they do not have a MSMS or TOF counterpart or two identicals exist.
+    :rtype: tuple[pd.DataFrame, pd.DataFrame]
     """
 
     # find suitable sample to iterate over compound names
-    # get all samples where both methods core and extended are available
+    # get all sample indices where both methods core and extended are available
     sample_rows = sample_list.loc[((~np.isnan(sample_list['Sample Index Core'])) & ((~np.isnan(sample_list['Sample Index Extended'])))), :].index
     # choose first sample from full sample list if only one method either core or extended is available for all samples
     if len(sample_rows) == 0:
-        sample_row = 0
+        compounds_filtered = data.loc[data['Sample Number'] == 0, ['Sample Index', 'Component Name']]
+        if pd.isnull(sample_list.loc[0, 'Sample Index Core']):
+            core_index = np.nan
+        else:
+            core_index = int(sample_list.loc[0, 'Sample Index Core'])
+        if pd.isnull(sample_list.loc[0, 'Sample Index Extended']):
+            extended_index = np.nan
+        else:
+            extended_index = int(sample_list.loc[0,'Sample Index Extended'])
     else:
         # get first sample where both methods are available in case that's possible
         sample_row = sample_rows[0]
+        core_index = int(sample_list.loc[sample_row, 'Sample Index Core'])
+        extended_index = int(sample_list.loc[sample_row,'Sample Index Extended'])
+        compounds_filtered = data.loc[data['Sample Number'] == sample_row, ['Sample Index', 'Component Name']]
 
-    # get list of all compound names considered
-    compounds_filtered = data.loc[data['Sample Index'] == sample_row, 'Component Name']
-    compounds_sorted = compounds_filtered[~compounds_filtered.str.contains(standard_identifiers)].to_list()  # channel names excluding IPS and IDA
-    eis_nis_sorted = compounds_filtered[compounds_filtered.str.contains(standard_identifiers)].to_list()  # channel names excluding IPS and IDA
-    # initialize lists
-    compounds_msms = []  # msms compounds
-    compounds_tof = []  # tof compounds
-    skip_compounds = []  # list of compounds already considered (can be skipped in followin iterations in loop)
-    # loop over all compounds from first sample
-    for component in compounds_sorted:
-        if component in skip_compounds:  # skip iteration if compound was already considered in previous iterations
+    index_to_method_mapper = {core_index: 'core', extended_index: 'extended'}
+    # make sure core sample comes first in order
+    compounds_sorted = compounds_filtered.loc[~compounds_filtered['Component Name'].str.contains(standard_identifiers), :]  # channel names and sample indices excluding IPS and IDA
+    # initialize lists for dataframes of compounds, and compounds to delete
+    compounds = []
+    delete_compounds = []
+    # list of compounds already considered (can be skipped in following iterations in loop)
+    skip_compounds = [] 
+    # loop over all compounds from first sample row
+    for (_, compound_row) in compounds_sorted.iterrows():
+        compound = compound_row['Component Name']
+        if compound in skip_compounds:  # skip iteration if compound was already considered in previous iterations
             continue
-        if '_TOF MS' in component:  # in case compound is from TOF channel
-            compounds_tof.append(component)  # add compound to TOF list
-            skip_compounds.append(component)  # make sure the TOF compound is not considered more than once
-            if component[:-7] in compounds_sorted:  # check if compound is available in corresponding MSMS channel
-                compounds_msms.append(component[:-7])  # add msms compound to MSMS list
+        if compound.endswith('_TOF MS'):  # in case compound is from TOF channel
+            # get related MSMS compound
+            msms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound[:-7],:]
+            # if no msms_compound is available, make sure component is deleted at a later point
+            if msms_compound.empty:
+                compounds.append(
+                    {'MSMS Compound Name': np.nan, 'TOF Compound Name': compound, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                )
+            # if only one msms compound is available save compound and related msms to dataframe
+            elif len(msms_compound) == 1:
+                compounds.append(
+                    {'MSMS Compound Name': msms_compound['Component Name'].values[0], 'TOF Compound Name': compound, 'from method': index_to_method_mapper[int(msms_compound['Sample Index'].values[0])]}
+                )
+                # if there are two TOF compounds, delete the one from the current method - works as long as ms compound becomes for TOF in order.
+                if len(compounds_sorted.loc[compounds_sorted['Component Name'] == compound,:]) > 1:
+                    delete_compounds.append({'Compound Name': compound, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]})
+            # keep track of problems
             else:
-                compounds_msms.append(np.nan)  # add NaN to MSMS list if corresponding msms compound is not available
-            skip_compounds.append(component[:-7])    # make sure the MSMS compound is not considered more than once
+                print('We obviously have a problem here')
+            skip_compounds.append(compound)  # make sure the TOF compound is not considered more than once
+            skip_compounds.append(compound[:-7])  # make sure the MS MS compound is not considered twice
         else:  # in case compound is from MSMS channel
-            compounds_msms.append(component)  # add compound to MSMS list
-            skip_compounds.append(component)  # make sure the MSMS compound is not considered more than once
-            if component + '_TOF MS' in compounds_sorted:  # check if compound is available in corresponding TOF channel
-                compounds_tof.append(component + '_TOF MS')  # add tof compound to TOF list
+             # get related TOF compound
+            tof_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound + '_TOF MS',:]
+            # if no tof_compound is available, make sure component is deleted at a later point
+            if tof_compound.empty:
+                compounds.append(
+                    {'MSMS Compound Name': compound, 'TOF Compound Name': np.nan, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                )
+            # if only one tof compound is available save compound and related msms to dataframe
+            elif len(tof_compound) == 1:
+                compounds.append(
+                    {'MSMS Compound Name': compound, 'TOF Compound Name': tof_compound['Component Name'].values[0], 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                )
             else:
-                compounds_tof.append(np.nan)  # add NaN to TOF list if corresponding tof compound is not available
-            skip_compounds.append(component + '_TOF MS')  # make sure the TOF compound is not considered more than once
+                if index_to_method_mapper[int(compound_row['Sample Index'].values[0])] == 'core':
+                    delete_compounds.append({'Compound Name': tof_compound['Component Name'].values[0], 'from method': 'extended'})
+                else:
+                    delete_compounds.append({'Compound Name': tof_compound['Component Name'].values[0], 'from method': 'core'})
 
-    # initialize and fill lists of sorted internal standards
-    eis_nis_msms = []  # msms internal standards
-    eis_nis_tof = []  # tof internal standards
+            skip_compounds.append(compound)  # make sure the TOF compound is not considered more than once
+            skip_compounds.append(compound + '_TOF MS')  # make sure the MS MS compound is not considered twice
+    compounds = pd.DataFrame(compounds)
+    delete_compounds = pd.DataFrame(delete_compounds)
+    return(compounds, delete_compounds)
+
+def get_tof_and_msms_standards(
+        data: pd.DataFrame, sample_list: pd.DataFrame, standard_identifiers: str, eis_identifier: str, nis_identifier: str,
+        ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Order of standards is conserved and the names are split to the (MS/MS) channel, and the TOF channel. If either channel is not available,
+    it is saved to a dataframe meant to delete standards at a later stage.
+
+    :param data: Data frame containing merged raw data of all files.
+    :type data: pd.DataFrame
+    :param standard_identifiers: All substrings necessary to identify mass labeled internal standards from compound names.
+    :type standard_identifiers: str
+    :type eis_identifier: str
+    :param nis_identifier: _description_
+    :type nis_identifier: str
+    :return: - standards: Dataframe containing standards in right order and the type of standard.
+             - delete_standards: Dataframe containing standards which should be deleted, because they do not have a MSMS or TOF counterpart.
+    :rtype: tuple[pd.DataFrame, pd.DataFrame]
+    """
+    # find suitable sample to iterate over compound names
+    # get all sample indices where both methods core and extended are available
+    sample_rows = sample_list.loc[((~np.isnan(sample_list['Sample Index Core'])) & ((~np.isnan(sample_list['Sample Index Extended'])))), :].index
+    # choose first sample from full sample list if only one method either core or extended is available for all samples
+    if len(sample_rows) == 0:
+        compounds_filtered = data.loc[data['Sample Number'] == 0, ['Sample Index', 'Component Name']]
+        if pd.isnull(sample_list.loc[0, 'Sample Index Core']):
+            core_index = np.nan
+        else:
+            core_index = int(sample_list.loc[0, 'Sample Index Core'])
+        if pd.isnull(sample_list.loc[0, 'Sample Index Extended']):
+            extended_index = np.nan
+        else:
+            extended_index = int(sample_list.loc[0,'Sample Index Extended'])
+    else:
+        # get first sample where both methods are available in case that's possible
+        sample_row = sample_rows[0]
+        core_index = int(sample_list.loc[sample_row, 'Sample Index Core'])
+        extended_index = int(sample_list.loc[sample_row,'Sample Index Extended'])
+        compounds_filtered = data.loc[data['Sample Number'] == sample_row, ['Sample Index', 'Component Name']]
+
+    index_to_method_mapper = {core_index: 'core', extended_index: 'extended'}
+    # make sure core sample comes first in order
+    eis_nis_sorted = compounds_filtered.loc[compounds_filtered['Component Name'].str.contains(standard_identifiers), :]  # channel names and sample indices excluding IPS and IDA
+
+    # initialize lists for dataframes of standards
+    standards = []
+    delete_standards = []
+
     skip_standards = []  # list of standards already considered (can be skipped in followin iterations in loop)
     # loop over all standards from first sample
-    for standard in eis_nis_sorted:
+    for (_,standard_row) in eis_nis_sorted.iterrows():
+        standard = standard_row['Component Name']
         if standard in skip_standards: # skip iteration if standard was already considered in previous iterations
             continue
-        if '_TOF MS' not in standard:  # in case standard is from MSMS channel
-            eis_nis_msms.append(standard)  # add standard to MSMS list
+        if not standard.endswith('_TOF MS'):  # in case standard is from MSMS channel
+            tof_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == standard[4:] + '_TOF MS',:]
+            if len(tof_standard) == 0:
+                delete_standards.append({'Compound Name': standard})
+            elif len(tof_standard) <= 2:
+                standards.append({'MSMS Standard Name': standard, 'TOF Standard Name': standard[4:] + '_TOF MS', 'Standard Type': standard[:3]})
+            else:
+                print('problem')
             skip_standards.append(standard)  # make sure the MSMS standard is not considered more than once
-            if standard[4:] + '_TOF MS' in eis_nis_sorted:  # check if standard is available in corresponding TOF channel
-                eis_nis_tof.append(standard[4:] + '_TOF MS')  # add tof standard to TOF list
-                skip_standards.append(standard[4:] + '_TOF MS')
-            else:
-                eis_nis_tof.append(np.nan)  # add NaN to TOF list if corresponding tof standard is not available
+            skip_standards.append(standard[4:] + '_TOF MS')  # make sure the TOF standard is not considered more than once  
         else:  # in case standard is from TOF channel
-            # in case standard is an IDA (differentiatiation only possible based on MSMS, as IDA and IPS label not available in TOF channel names)
-            if eis_identifier + '-' + standard[:-7] in eis_nis_sorted:
-                eis_nis_tof.append(standard)  # add TOF standard to TOF list
-                skip_standards.append(standard)  # make sure the TOF standard is not considered more than once
-                if standard[4:] + '_TOF MS' in eis_nis_sorted:  # check if standard is available in corresponding TOF channel
-                    eis_nis_msms.append(eis_identifier + '-' + standard[:-7])  # add MSMS standard to MSMS list
-                    skip_standards.append(eis_identifier + '-' + standard[:-7])  # make sure the MSMS standard is not considered more than once
+            msms_eis_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == eis_identifier + standard[:-7],:]
+            msms_nis_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == nis_identifier + standard[:-7],:]
+            if len(msms_eis_standard) == 0:
+                if len(msms_nis_standard) == 0:
+                    delete_standards.append({'Compound Name': standard})
+                elif len(msms_nis_standard) == 1:
+                    standards.append({'MSMS Standard Name': msms_nis_standard.loc['Component Name', :].values[0], 'TOF Standard Name': standard, 'Standard Type': nis_identifier})
+                    skip_standards.append(msms_nis_standard.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
                 else:
-                    eis_nis_msms.append(np.nan)  # add NaN to TOF list if corresponding tof standard is not available
-            elif nis_identifier + '-' + standard[:-7] in eis_nis_sorted:  # in case standard is an IPS
-                eis_nis_tof.append(standard)  # add TOF standard to TOF list
-                skip_standards.append(standard)  # make sure the TOF standard is not considered more than once
-                if standard[4:] + '_TOF MS' in eis_nis_sorted:  # check if standard is available in corresponding TOF channel
-                    eis_nis_msms.append(nis_identifier + '-' + standard[:-7])  # add MSMS standard to MSMS list
-                    skip_standards.append(nis_identifier + '-' + standard[:-7])  # make sure the MSMS standard is not considered more than once
+                    print('problem: ', standard)
+            elif len(msms_eis_standard) == 1:
+                if len(msms_nis_standard) == 0:
+                    standards.append({'MSMS Standard Name': msms_nis_standard.loc['Component Name', :].values[0], 'TOF Standard Name': standard, 'Standard Type': nis_identifier})
+                    skip_standards.append(msms_eis_standard.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
                 else:
-                    eis_nis_msms.append(np.nan)  # add NaN to TOF list if corresponding tof standard is not available
+                    print('problem', standard)
             else:
-                print(f'The standard: {standard} has no corresponding IDA or IPS in the default MS channel. It is ignored in the following calculations.')
+                print('problem: ', standard)
+            skip_standards.append(standard)  # make sure the MSMS standard is not considered more than once
 
-    # seperate standard list into nis and eis accordingly
-    eis_msms = []  # initialize extracted internal standard list of msms channel
-    eis_tof = []  # initialize extracted internal standard list of tof channel
-    nis_msms = []  # initialize non-extracted internal standard list of msms channel
-    nis_tof = []  # initialize non-extracted internal standard list of tof channel
-    for (is_msms, is_tof) in zip(eis_nis_msms, eis_nis_tof):
-        identifier = is_msms[:3]
-        if identifier == nis_identifier:
-            nis_msms.append(is_msms)
-            nis_tof.append(is_tof)
-        elif identifier == eis_identifier:
-            eis_msms.append(is_msms)
-            eis_tof.append(is_tof)
-
-    return compounds_msms, compounds_tof, eis_nis_msms, eis_nis_tof, eis_msms, eis_tof, nis_msms, nis_tof
+    standards = pd.DataFrame(standards)
+    standards.to_csv('standards.csv')
+    delete_standards = pd.DataFrame(delete_standards)
+    delete_standards.to_csv('delete_standards.csv')
+    return standards, delete_standards
 
 def get_eis_for_pfas(data: pd.DataFrame, sample_list: pd.DataFrame, pfas_compounds: list[str]) -> list[str]:
     """Returns list of internal standards corresponsing to input list of pfas_compounds in the corresponding order.
@@ -467,7 +497,7 @@ def get_eis_for_pfas(data: pd.DataFrame, sample_list: pd.DataFrame, pfas_compoun
         # get first sample where both methods are available in case that's possible
         sample_row = sample_rows[0]
 
-    example_data = data.loc[data['Sample Index'] == sample_row, ['Component Name', 'IS Name']]
+    example_data = data.loc[data['Sample Number'] == sample_row, ['Component Name', 'IS Name']]
     eis = []
 
     for native_pfas in pfas_compounds:
@@ -510,9 +540,9 @@ def parse_project_folder_structure(project_folder: str) -> None:
             "There is no subfolder 'code_parameters' in your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
-    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'retention_time_and_iar_thresholds.csv')):
+    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'rt_iar_thresholds_channel_selection.csv')):
         raise ImportError(
-            "There is no retention_time_and_iar_thresholds.csv in code_parameters or your project folder." \
+            "There is no rt_iar_thresholds_channel_selection.csv in code_parameters or your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
     if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'recovery_or_standard_response_thresholds.csv')):
@@ -638,11 +668,13 @@ def color_fields(
 if __name__ == "__main__":
     data = read_in_data_files(project_folder='test')
     sample_list = get_sample_id_and_name(data=data)
-    data = clean_up_data(data=data, sample_list=sample_list, channel_selection='average')
+    data = clean_up_data(data=data, sample_list=sample_list)
     data = reassign_tof_nis_to_eis(data)
 
     standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
-    compounds_msms, compounds_tof, ida_ips_msms, ida_ips_tof, _, _, _, _ = get_compounds_and_standards(
+    compounds, delete_compounds = get_tof_and_msms_compounds(
         data=data, sample_list=sample_list, standard_identifiers=standard_identifiers,
-        eis_identifier='IDA', nis_identifier='IPS',
         )
+    standards, delete_standards = get_tof_and_msms_standards(
+        data=data, sample_list=sample_list, standard_identifiers=standard_identifiers, eis_identifier='IDA', nis_identifier='IPS',
+    )
