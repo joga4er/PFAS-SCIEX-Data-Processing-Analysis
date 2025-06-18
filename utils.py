@@ -34,6 +34,8 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
             any(file_extension in elem for file_extension in ['.txt', '.csv'])
             ]
 
+    raw_data_files_list = sorted(raw_data_files_list)  # make sure core method is read in first, then extended method.
+
     # Check if project folder contains raw input data files and throw error if it does not.
     if len(raw_data_files_list) == 0:
         raise ImportError("""
@@ -334,7 +336,7 @@ def get_tof_and_msms_compounds(
     compounds = []
     delete_compounds = []
     # list of compounds already considered (can be skipped in following iterations in loop)
-    skip_compounds = [] 
+    skip_compounds = []
     # loop over all compounds from first sample row
     for (_, compound_row) in compounds_sorted.iterrows():
         compound = compound_row['Component Name']
@@ -375,9 +377,15 @@ def get_tof_and_msms_compounds(
                     {'MSMS Compound Name': compound, 'TOF Compound Name': tof_compound['Component Name'].values[0], 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
                 )
             else:
-                if index_to_method_mapper[int(compound_row['Sample Index'].values[0])] == 'core':
+                if index_to_method_mapper[int(compound_row['Sample Index'])] == 'core':
+                    compounds.append(
+                    {'MSMS Compound Name': compound, 'TOF Compound Name': tof_compound['Component Name'].values[0], 'from method': 'core'}
+                    )
                     delete_compounds.append({'Compound Name': tof_compound['Component Name'].values[0], 'from method': 'extended'})
                 else:
+                    compounds.append(
+                        {'MSMS Compound Name': compound, 'TOF Compound Name': tof_compound['Component Name'].values[0], 'from method': 'extended'}
+                    )
                     delete_compounds.append({'Compound Name': tof_compound['Component Name'].values[0], 'from method': 'core'})
 
             skip_compounds.append(compound)  # make sure the TOF compound is not considered more than once
