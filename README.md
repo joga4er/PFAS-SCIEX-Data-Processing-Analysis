@@ -20,6 +20,13 @@ Note: Both jupyter notebooks are using functions defined in **utils.py** and dat
 To run the jupyter notebook, you will need any kind of integrated code environment (IDE).
 E. g. you can install Anaconda and start jupyter lab from there. Alternatively cloud solutions like google colab can be used.
 
+##### definitions
+- **extracted internal standards (EIS)**: mass-labeled internal standards spiked to the sample before the analytical process (extraction, clean-up, etc.), formally known as **IDA**.
+- **non-extracted internal standards (NIS)**: mass-labeled internal standards spiked to the sample after the analytical process (extraction, clean-up, etc), but before LCMS/MS, also known as **injection standard**, formally known as **IPS**.
+- **target analytes**: PFAS compounds to be quantified in LCMS/MS analysis, also known as **native compounds**.
+- **HRMS** channel: high resolution mass spectrometry channel, which screens for ionized native compounds. Used to confirm the detection of native compounds. Formally known as time of flight **TOF** channel.
+- **MS/MS** channel: mass spectrometry channel, which screens for ionized, fragmented ions. Used to quantify concentration of native compounds. 
+
 # 2 Pipeline to link lcms data and observe correlations (link_data.ipynb)
 Jupyter notebook (R based), which links results from lcms data analysis pipeline and proteomics results, evaluates Pearson correlation coefficients and p-values, and creates plots.
 

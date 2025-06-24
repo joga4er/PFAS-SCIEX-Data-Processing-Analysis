@@ -85,6 +85,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
             # make sure each sample name ends with Ext for extended method and with Core for core method
             mask_names = this_data['Sample Name'].str.endswith('Ext')
             this_data.loc[~mask_names, 'Sample Name'] = [sample_name + ' Ext' for sample_name in this_data['Sample Name'][~mask_names].to_list()]
+    
             # delete calibration data if already included in previous samples
             if extended_calibration_detected:
                 this_data = this_data.loc[this_data['Sample Type'] != 'Standard', :]
@@ -93,6 +94,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
                     extended_calibration_detected = True
 
         elif batch_type == 'core':
+            # make sure each sample name ends with Ext for extended method and with Core for core method
             mask_names = this_data['Sample Name'].str.endswith('Core')
             this_data.loc[~mask_names, 'Sample Name'] = [sample_name + ' Core' for sample_name in this_data['Sample Name'][~mask_names].to_list()]
             # delete calibration data if already included in previous samples
@@ -158,8 +160,8 @@ def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
                 sample_id_batch_type_data = sample_id_batch_data.loc[data['Sample Type'] == sample_type,:]
                 sample_names = sample_id_batch_type_data['Sample Name'].unique()
                 # get core sample names for related sample ID from related bath
-                core_sample_names = [sample_name for sample_name in sample_names if sample_name[-4:] == "Core"]
-                extended_sample_names = [sample_name for sample_name in sample_names if sample_name[-3:] == "Ext"]
+                core_sample_names = [sample_name for sample_name in sample_names if sample_name.endswith("Core")]
+                extended_sample_names = [sample_name for sample_name in sample_names if sample_name.endswith("Ext")]
                 # iterate over core sample names
                 for core_sample_name in core_sample_names:
                     # get data of core sample name (and batch type and id)
@@ -292,19 +294,21 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame) -> pd.DataFrame
     return data
 
 def get_tof_and_msms_compounds(
-        data: pd.DataFrame, sample_list: pd.DataFrame, standard_identifiers: str,
+        data: pd.DataFrame, sample_list: pd.DataFrame, hrms_identifier: str, standard_identifiers: str,
         ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Order of PFAS compounds is conserved and the names are split to the (MS/MS) channel, and the TOF channel. If either channel is not available or available twice,
+    """Order of PFAS compounds is conserved and the names are split to the (MS/MS) channel, and the HRMS channel. If either channel is not available or available twice,
     it is saved to a dataframe meant to delete compounds at a later stage.
 
     :param data: Data frame containing merged raw data of all files.
     :type data: pd.DataFrame
     :param sample_list: Data frame containing all samples occuring in raw data.
     :type sample_list: pd.DataFrame
+    :param hrms_identifier: Identifier for high resolution mass spectrometry channel, usually '_HRMS' or '_TOF MS'.
+    :type hrms_identifier: str
     :param standard_identifiers: All substrings necessary to identify mass labeled internal standards from compound names.
     :type standard_identifiers: str
     :return: - compounds: Dataframe containing compounds in right order and the information of which method is used to extract the information from.
-             - delete_compounds: Dataframe containing compounds which should be deleted, because they do not have a MSMS or TOF counterpart or two identicals exist.
+             - delete_compounds: Dataframe containing compounds which should be deleted, because they do not have a MSMS or HRMS counterpart or two identicals exist.
     :rtype: tuple[pd.DataFrame, pd.DataFrame]
     """
 
@@ -342,73 +346,78 @@ def get_tof_and_msms_compounds(
         compound = compound_row['Component Name']
         if compound in skip_compounds:  # skip iteration if compound was already considered in previous iterations
             continue
-        if compound.endswith('_TOF MS'):  # in case compound is from TOF channel
+        if compound.endswith(hrms_identifier):  # in case compound is from HRMS channel
             # get related MSMS compound
-            msms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound[:-7],:]
+            msms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound[:-(1) * len(hrms_identifier)],:]
             # if no msms_compound is available, make sure component is deleted at a later point
             if msms_compound.empty:
                 compounds.append(
-                    {'MSMS Compound Name': np.nan, 'TOF Compound Name': compound, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                    {'MSMS Compound Name': np.nan, 'HRMS Compound Name': compound, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
                 )
             # if only one msms compound is available save compound and related msms to dataframe
             elif len(msms_compound) == 1:
                 compounds.append(
-                    {'MSMS Compound Name': msms_compound['Component Name'].values[0], 'TOF Compound Name': compound, 'from method': index_to_method_mapper[int(msms_compound['Sample Index'].values[0])]}
+                    {'MSMS Compound Name': msms_compound['Component Name'].values[0], 'HRMS Compound Name': compound, 'from method': index_to_method_mapper[int(msms_compound['Sample Index'].values[0])]}
                 )
-                # if there are two TOF compounds, delete the one from the current method - works as long as ms compound becomes for TOF in order.
+                # if there are two HRMS compounds, delete the one from the current method - works as long as ms compound becomes for HRMS in order.
                 if len(compounds_sorted.loc[compounds_sorted['Component Name'] == compound,:]) > 1:
                     delete_compounds.append({'Compound Name': compound, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]})
             # keep track of problems
             else:
                 print('We obviously have a problem here')
-            skip_compounds.append(compound)  # make sure the TOF compound is not considered more than once
-            skip_compounds.append(compound[:-7])  # make sure the MS MS compound is not considered twice
+            skip_compounds.append(compound)  # make sure the HRMS compound is not considered more than once
+            skip_compounds.append(compound[:-(1) * len(hrms_identifier)])  # make sure the MS MS compound is not considered twice
         else:  # in case compound is from MSMS channel
-             # get related TOF compound
-            tof_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound + '_TOF MS',:]
-            # if no tof_compound is available, make sure component is deleted at a later point
-            if tof_compound.empty:
+             # get related HRMS compound
+            hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound + hrms_identifier,:]
+            # if no hrms_compound is available, make sure component is deleted at a later point
+            if hrms_compound.empty:
                 compounds.append(
-                    {'MSMS Compound Name': compound, 'TOF Compound Name': np.nan, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                    {'MSMS Compound Name': compound, 'HRMS Compound Name': np.nan, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
                 )
-            # if only one tof compound is available save compound and related msms to dataframe
-            elif len(tof_compound) == 1:
+            # if only one hrms compound is available save compound and related msms to dataframe
+            elif len(hrms_compound) == 1:
                 compounds.append(
-                    {'MSMS Compound Name': compound, 'TOF Compound Name': tof_compound['Component Name'].values[0], 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                    {'MSMS Compound Name': compound, 'HRMS Compound Name': hrms_compound['Component Name'].values[0], 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
                 )
             else:
                 if index_to_method_mapper[int(compound_row['Sample Index'])] == 'core':
                     compounds.append(
-                    {'MSMS Compound Name': compound, 'TOF Compound Name': tof_compound['Component Name'].values[0], 'from method': 'core'}
+                    {'MSMS Compound Name': compound, 'HRMS Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'core'}
                     )
-                    delete_compounds.append({'Compound Name': tof_compound['Component Name'].values[0], 'from method': 'extended'})
+                    delete_compounds.append({'Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'extended'})
                 else:
                     compounds.append(
-                        {'MSMS Compound Name': compound, 'TOF Compound Name': tof_compound['Component Name'].values[0], 'from method': 'extended'}
+                        {'MSMS Compound Name': compound, 'HRMS Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'extended'}
                     )
-                    delete_compounds.append({'Compound Name': tof_compound['Component Name'].values[0], 'from method': 'core'})
+                    delete_compounds.append({'Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'core'})
 
-            skip_compounds.append(compound)  # make sure the TOF compound is not considered more than once
-            skip_compounds.append(compound + '_TOF MS')  # make sure the MS MS compound is not considered twice
+            skip_compounds.append(compound)  # make sure the HRMS compound is not considered more than once
+            skip_compounds.append(compound + hrms_identifier)  # make sure the MS MS compound is not considered twice
     compounds = pd.DataFrame(compounds)
     delete_compounds = pd.DataFrame(delete_compounds)
     return(compounds, delete_compounds)
 
 def get_tof_and_msms_standards(
-        data: pd.DataFrame, sample_list: pd.DataFrame, standard_identifiers: str, eis_identifier: str, nis_identifier: str,
+        data: pd.DataFrame, sample_list: pd.DataFrame, hrms_identifier: str, standard_identifiers: str, eis_identifier: str, nis_identifier: str,
         ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Order of standards is conserved and the names are split to the (MS/MS) channel, and the TOF channel. If either channel is not available,
+    """Order of standards is conserved and the names are split to the (MS/MS) channel, and the HRMS channel. If either channel is not available,
     it is saved to a dataframe meant to delete standards at a later stage.
 
     :param data: Data frame containing merged raw data of all files.
     :type data: pd.DataFrame
+    :param sample_list: Data frame containing all samples occuring in raw data.
+    :type sample_list: pd.DataFrame
     :param standard_identifiers: All substrings necessary to identify mass labeled internal standards from compound names.
     :type standard_identifiers: str
+    :param hrms_identifier: Identifier for high resolution mass spectrometry channel, usually '_HRMS' or '_TOF MS'.
+    :type hrms_identifier: str
+    :param eis_identifier: Identifier for EIS channel, usually 'EIS' or 'IDA'.
     :type eis_identifier: str
-    :param nis_identifier: _description_
+    :param nis_identifier: Identifier for NIS channel, usually 'NIS' or 'IPS'.
     :type nis_identifier: str
     :return: - standards: Dataframe containing standards in right order and the type of standard.
-             - delete_standards: Dataframe containing standards which should be deleted, because they do not have a MSMS or TOF counterpart.
+             - delete_standards: Dataframe containing standards which should be deleted, because they do not have a MSMS or HRMS counterpart.
     :rtype: tuple[pd.DataFrame, pd.DataFrame]
     """
     # find suitable sample to iterate over compound names
@@ -446,30 +455,34 @@ def get_tof_and_msms_standards(
         standard = standard_row['Component Name']
         if standard in skip_standards: # skip iteration if standard was already considered in previous iterations
             continue
-        if not standard.endswith('_TOF MS'):  # in case standard is from MSMS channel
-            tof_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == standard[4:] + '_TOF MS',:]
-            if len(tof_standard) == 0:
-                delete_standards.append({'Compound Name': standard})
-            elif len(tof_standard) <= 2:
-                standards.append({'MSMS Standard Name': standard, 'TOF Standard Name': standard[4:] + '_TOF MS', 'Standard Type': standard[:3]})
+        if not standard.endswith(hrms_identifier):  # in case standard is from MSMS channel
+            hrms_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == standard[4:] + hrms_identifier,:]
+            if len(hrms_standard) == 0:
+                # exclude IPS-1802_PFHxS
+                if standard == 'IPS-18O2_PFHxS':
+                    standards.append({'MSMS Standard Name': standard, 'HRMS Standard Name': np.nan, 'Standard Type': standard[:3]})
+                else:
+                    delete_standards.append({'Compound Name': standard})
+            elif len(hrms_standard) <= 2:
+                standards.append({'MSMS Standard Name': standard, 'HRMS Standard Name': standard[4:] + hrms_identifier, 'Standard Type': standard[:3]})
             else:
                 print('problem')
             skip_standards.append(standard)  # make sure the MSMS standard is not considered more than once
-            skip_standards.append(standard[4:] + '_TOF MS')  # make sure the TOF standard is not considered more than once  
-        else:  # in case standard is from TOF channel
-            msms_eis_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == eis_identifier + standard[:-7],:]
-            msms_nis_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == nis_identifier + standard[:-7],:]
+            skip_standards.append(standard[4:] + hrms_identifier)  # make sure the HRMS standard is not considered more than once  
+        else:  # in case standard is from HRMS channel
+            msms_eis_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == eis_identifier + standard[:-(1) * len(hrms_identifier)],:]
+            msms_nis_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == nis_identifier + standard[:-(1) * len(hrms_identifier)],:]
             if len(msms_eis_standard) == 0:
                 if len(msms_nis_standard) == 0:
                     delete_standards.append({'Compound Name': standard})
                 elif len(msms_nis_standard) == 1:
-                    standards.append({'MSMS Standard Name': msms_nis_standard.loc['Component Name', :].values[0], 'TOF Standard Name': standard, 'Standard Type': nis_identifier})
+                    standards.append({'MSMS Standard Name': msms_nis_standard.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': nis_identifier})
                     skip_standards.append(msms_nis_standard.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
                 else:
                     print('problem: ', standard)
             elif len(msms_eis_standard) == 1:
                 if len(msms_nis_standard) == 0:
-                    standards.append({'MSMS Standard Name': msms_nis_standard.loc['Component Name', :].values[0], 'TOF Standard Name': standard, 'Standard Type': nis_identifier})
+                    standards.append({'MSMS Standard Name': msms_nis_standard.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': nis_identifier})
                     skip_standards.append(msms_eis_standard.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
                 else:
                     print('problem', standard)
@@ -585,20 +598,20 @@ def round_to_n_sigfigs(x: float, n: int) -> float:
     return round(x, -int(floor(log10(abs(x)))) + (n - 1))
 
 def reassign_tof_nis_to_eis(data: pd.DataFrame) -> pd.DataFrame:
-    """Inputs correctly assigned NIS in column 'Component Group Name' for all EIS of the TOF channel.
+    """Inputs correctly assigned NIS in column 'Component Group Name' for all EIS of the HRMS channel.
     Assigment is based on the csv input file nis_to_eis_assignment.csv located in the lab_folders_directory.
     If needed change accordingly.
 
     :param data: Data frame containing merged raw data of all files.
     :type data: pd.DataFrame
-    :return: Data Frame with corrected column 'Component Group Name' for all EIS of TOF channels
+    :return: Data Frame with corrected column 'Component Group Name' for all EIS of HRMS channels
     :rtype: pd.DataFrame
     """    
     assignment = pd.read_csv(os.path.join('lab_parameters', 'nis_to_eis_assignment.csv'))
     eis_compounds = assignment['eis compound'].to_list()
     related_nis_compounds = assignment['nis compound'].to_list()
-    for (eis_tof_compound, related_nis_tof_compound) in zip(eis_compounds, related_nis_compounds):
-        data.loc[data['Component Name']==eis_tof_compound, 'Component Group Name'] = related_nis_tof_compound
+    for (eis_hrms_compound, related_nis_hrms_compound) in zip(eis_compounds, related_nis_compounds):
+        data.loc[data['Component Name']==eis_hrms_compound, 'Component Group Name'] = related_nis_hrms_compound
     return data
 
 def change_worksheet_color(filepath: str, sheetnames: list[str], color: str) -> None:
@@ -673,15 +686,16 @@ def color_fields(
     workbook.close()
 
 if __name__ == "__main__":
-    data = read_in_data_files(project_folder='test')
+    data = read_in_data_files(project_folder='julie_liver_kansas')
     sample_list = get_sample_id_and_name(data=data)
     data = clean_up_data(data=data, sample_list=sample_list)
     data = reassign_tof_nis_to_eis(data)
 
     standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
+    hrms_identifier = '_TOF MS'
     compounds, delete_compounds = get_tof_and_msms_compounds(
-        data=data, sample_list=sample_list, standard_identifiers=standard_identifiers,
+        data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers,
         )
     standards, delete_standards = get_tof_and_msms_standards(
-        data=data, sample_list=sample_list, standard_identifiers=standard_identifiers, eis_identifier='IDA', nis_identifier='IPS',
+        data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers, eis_identifier='IDA', nis_identifier='IPS',
     )
