@@ -273,13 +273,13 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame) -> pd.DataFrame
         sample_index = row_data['Sample Index']
         sample_name = row_data['Sample Name']
         # if the sample is from the core method get the sample number from the core sample index
-        if sample_name[-4:] == "Core":
+        if sample_name.endswith("Core"):
             sample_number = sample_list.loc[(
                 (sample_list['Sample Name Core']==sample_name) & 
                 (sample_list['Sample Index Core']==sample_index)
                     ),:].index
         # if the sample is from the extended method get the sample number from the extended sample index
-        elif sample_name[-3:] == "Ext":
+        elif sample_name.endswith("Ext"):
             sample_number = sample_list.loc[(
                 (sample_list['Sample Name Extended']==sample_name) & 
                 (sample_list['Sample Index Extended']==sample_index)
@@ -686,7 +686,7 @@ def color_fields(
     workbook.close()
 
 if __name__ == "__main__":
-    data = read_in_data_files(project_folder='julie_liver_kansas')
+    data = read_in_data_files(project_folder='test')
     sample_list = get_sample_id_and_name(data=data)
     data = clean_up_data(data=data, sample_list=sample_list)
     data = reassign_tof_nis_to_eis(data)
