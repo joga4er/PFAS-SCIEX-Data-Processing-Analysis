@@ -99,6 +99,7 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
     for (msms_compound, tof_compound) in zip(compounds['MSMS Compound Name'].tolist(), compounds['HRMS Compound Name'].tolist()):
         msms_data = calibration_data.loc[calibration_data['Component Name'] == msms_compound, :]
         tof_data = calibration_data.loc[calibration_data['Component Name'] == tof_compound, :]
+        min_idl = 1e-3
         for calibration_point in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
             previous = msms_data.loc[(
                 (msms_data['Sample ID'] == f'CS{calibration_point}') &
@@ -109,10 +110,14 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
                     (msms_data['Sample ID'] == f'CS{calibration_point + 1}') &
                     (msms_data['Used'] == True)
                 ), :]
-                idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean() 
+                idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
+                idl = max(idl, min_idl)
                 idl_data.loc[0, msms_compound] = round(idl, ndigits=3)
                 idl_data.loc[1, msms_compound] = previous['Actual Concentration'].mean()
                 break
+            else:
+                min_idl = previous['Actual Concentration'].mean()
+        min_idl = 1e-3
         for calibration_point in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
             previous = tof_data.loc[(
                 (tof_data['Sample ID'] == f'CS{calibration_point}') &
@@ -123,10 +128,13 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
                     (tof_data['Sample ID'] == f'CS{calibration_point + 1}') &
                     (tof_data['Used'] == True)
                 ), :]
-                idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean() 
+                idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
+                idl = max(idl, min_idl)
                 idl_data.loc[2, msms_compound] = round(idl, ndigits=3)
                 idl_data.loc[3, msms_compound] = previous['Actual Concentration'].mean()
                 break
+            else:
+                min_idl = previous['Actual Concentration'].mean() # ensure that IDL is not smaller than point where peak was not detected.
 
     idl_data.to_csv(
         os.path.join('lab_parameters', f'{matrix_name}_idl.csv'), index=False, encoding='utf-8'
@@ -135,7 +143,7 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
 
 if __name__ == "__main__":
     calculate_idls(
-        matrix_name='Serum',
-        filepath_core=r'julie_serum_kansas\University of Kansas_Human Serum PFAS Analysis_core.txt',
-        filepath_extended=r'julie_serum_kansas\University of Kansas_Human Serum PFAS Analysis_extended.txt',
+        matrix_name='Test Matrix',
+        filepath_core=r'test\241031_test_data_core.txt',
+        filepath_extended=r'test\241031_test_data_extended.txt',
     )
