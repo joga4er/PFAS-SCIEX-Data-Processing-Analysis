@@ -426,22 +426,10 @@ def get_tof_and_msms_standards(
     # choose first sample from full sample list if only one method either core or extended is available for all samples
     if len(sample_rows) == 0:
         compounds_filtered = data.loc[data['Sample Number'] == 0, ['Sample Index', 'Component Name']]
-        if pd.isnull(sample_list.loc[0, 'Sample Index Core']):
-            core_index = np.nan
-        else:
-            core_index = int(sample_list.loc[0, 'Sample Index Core'])
-        if pd.isnull(sample_list.loc[0, 'Sample Index Extended']):
-            extended_index = np.nan
-        else:
-            extended_index = int(sample_list.loc[0,'Sample Index Extended'])
     else:
         # get first sample where both methods are available in case that's possible
-        sample_row = sample_rows[0]
-        core_index = int(sample_list.loc[sample_row, 'Sample Index Core'])
-        extended_index = int(sample_list.loc[sample_row,'Sample Index Extended'])
-        compounds_filtered = data.loc[data['Sample Number'] == sample_row, ['Sample Index', 'Component Name']]
+        compounds_filtered = data.loc[data['Sample Number'] == sample_rows[0], ['Sample Index', 'Component Name']]
 
-    index_to_method_mapper = {core_index: 'core', extended_index: 'extended'}
     # make sure core sample comes first in order
     eis_nis_sorted = compounds_filtered.loc[compounds_filtered['Component Name'].str.contains(standard_identifiers), :]  # channel names and sample indices excluding IPS and IDA
 
@@ -456,36 +444,39 @@ def get_tof_and_msms_standards(
         if standard in skip_standards: # skip iteration if standard was already considered in previous iterations
             continue
         if not standard.endswith(hrms_identifier):  # in case standard is from MSMS channel
-            hrms_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == standard[4:] + hrms_identifier,:]
-            if len(hrms_standard) == 0:
+            hrms_standard_v1 = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == standard[4:] + hrms_identifier, :]
+            hrms_standard_v2 = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == standard + hrms_identifier, :]
+            if len(hrms_standard_v1) == 0 and len(hrms_standard_v2) == 0:
                 # exclude IPS-1802_PFHxS
                 if standard == 'IPS-18O2_PFHxS':
                     standards.append({'MSMS Standard Name': standard, 'HRMS Standard Name': np.nan, 'Standard Type': standard[:3]})
                 else:
                     delete_standards.append({'Compound Name': standard})
-            elif len(hrms_standard) <= 2:
+            elif len(hrms_standard_v1) <= 2 and len(hrms_standard_v2) == 0:
                 standards.append({'MSMS Standard Name': standard, 'HRMS Standard Name': standard[4:] + hrms_identifier, 'Standard Type': standard[:3]})
+                skip_standards.append(standard[4:] + hrms_identifier)  # make sure the HRMS standard is not considered more than once
+            elif len(hrms_standard_v2) <= 2 and len(hrms_standard_v1) == 0:
+                standards.append({'MSMS Standard Name': standard, 'HRMS Standard Name': standard + hrms_identifier, 'Standard Type': standard[:3]})
+                skip_standards.append(standard + hrms_identifier)  # make sure the HRMS standard is not considered more than once
             else:
                 print('problem')
             skip_standards.append(standard)  # make sure the MSMS standard is not considered more than once
-            skip_standards.append(standard[4:] + hrms_identifier)  # make sure the HRMS standard is not considered more than once  
+            
         else:  # in case standard is from HRMS channel
-            msms_eis_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == eis_identifier + standard[:-(1) * len(hrms_identifier)],:]
-            msms_nis_standard = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == nis_identifier + standard[:-(1) * len(hrms_identifier)],:]
-            if len(msms_eis_standard) == 0:
-                if len(msms_nis_standard) == 0:
-                    delete_standards.append({'Compound Name': standard})
-                elif len(msms_nis_standard) == 1:
-                    standards.append({'MSMS Standard Name': msms_nis_standard.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': nis_identifier})
-                    skip_standards.append(msms_nis_standard.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
-                else:
-                    print('problem: ', standard)
-            elif len(msms_eis_standard) == 1:
-                if len(msms_nis_standard) == 0:
-                    standards.append({'MSMS Standard Name': msms_nis_standard.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': nis_identifier})
-                    skip_standards.append(msms_eis_standard.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
-                else:
-                    print('problem', standard)
+            msms_eis_standard_v1 = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == eis_identifier + standard[:-(1) * len(hrms_identifier)],:]
+            msms_nis_standard_v1 = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == nis_identifier + standard[:-(1) * len(hrms_identifier)],:]
+            msms_standard_v2 = eis_nis_sorted.loc[eis_nis_sorted['Component Name'] == standard[:-(1) * len(hrms_identifier)],:]
+            if len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 0:
+                delete_standards.append({'Compound Name': standard})
+            elif len(msms_standard_v2) == 1 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 0:
+                standards.append({'MSMS Standard Name': msms_standard_v2.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': standard[:3]})
+                skip_standards.append(msms_nis_standard_v1.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
+            elif len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 1 and len(msms_nis_standard_v1) == 0:
+                standards.append({'MSMS Standard Name': msms_eis_standard_v1.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': eis_identifier})
+                skip_standards.append(msms_eis_standard_v1.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
+            elif len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 1:
+                standards.append({'MSMS Standard Name': msms_nis_standard_v1.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': nis_identifier})
+                skip_standards.append(msms_nis_standard_v1.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
             else:
                 print('problem: ', standard)
             skip_standards.append(standard)  # make sure the MSMS standard is not considered more than once
@@ -686,16 +677,16 @@ def color_fields(
     workbook.close()
 
 if __name__ == "__main__":
-    data = read_in_data_files(project_folder='test')
+    data = read_in_data_files(project_folder=r'jarod/grills')
     sample_list = get_sample_id_and_name(data=data)
     data = clean_up_data(data=data, sample_list=sample_list)
     data = reassign_tof_nis_to_eis(data)
 
     standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
-    hrms_identifier = '_TOF MS'
+    hrms_identifier = '_HRMS'
     compounds, delete_compounds = get_tof_and_msms_compounds(
         data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers,
         )
     standards, delete_standards = get_tof_and_msms_standards(
-        data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers, eis_identifier='IDA', nis_identifier='IPS',
+        data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers, eis_identifier='EIS', nis_identifier='NIS',
     )
