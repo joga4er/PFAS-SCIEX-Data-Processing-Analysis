@@ -263,6 +263,10 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame) -> pd.DataFrame
     mask_names = data['Component Name'].str.endswith(' _TOF MS')
     data.loc[mask_names, 'Component Name'] = [compound[:-8] + '_TOF MS' for compound in data.loc[mask_names, 'Component Name'].to_list()]
 
+     # some have an underscore between TOF and MS, this is removed
+    mask_names = data['Component Name'].str.endswith(' _HRMS')
+    data.loc[mask_names, 'Component Name'] = [compound[:-6] + '_HRMS' for compound in data.loc[mask_names, 'Component Name'].to_list()]
+
     data.loc[:,'Sample Number'] = [np.nan] * len(data)
 
     # introduce column sample number and save right sample number to each sample
