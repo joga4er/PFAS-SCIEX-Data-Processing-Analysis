@@ -6,7 +6,7 @@ from utils import clean_up_data, reassign_tof_nis_to_eis, get_tof_and_msms_compo
 
 # global variable definitions
 standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
-hrms_identifier = '_TOF MS'
+hrms_identifier = '_HRMS'
 import os
 
 def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_extended: Optional[str],):
@@ -143,7 +143,7 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
 
 if __name__ == "__main__":
     calculate_idls(
-        matrix_name='Test Matrix',
-        filepath_core=r'test\241031_test_data_core.txt',
-        filepath_extended=r'test\241031_test_data_extended.txt',
+        matrix_name='2025_pfas_default',
+        filepath_core=r'jarod\grills\20250724_Grills_PW_core.txt',
+        filepath_extended=r'jarod\grills\20250724_Grills_PW_extended.txt',
     )
