@@ -1,8 +1,12 @@
 # 1 Data Analysis Pipeline for targeted LCMS Analysis (data_analysis.ipynb)
-Jupyter notebook (python based), which takes raw liquit chromatography mass spectroscopy (LCMS) data (exported table from SCIEX Analyst Software),
-computes retention time differences (RTD) to related extracted internal standard, method detection limits, recovery rates (RR) or standard response deviations (RSD), and ion abundance ratio deviations (IARD).
+Jupyter notebook (python based), which processes data from Sciex QTOF high resolution liquit chromatography - tandem mass spectroscopy (LCMS-MS) and evaluates quality control criteria in line with EPA1633A.
+It takes raw data (exported tables from SCIEX Analyst Software) from two methods containing targeted PFAS compounds, combines the methods for each batch, and computes the following :
+- retention time differences (RTD) to related extracted internal standard
+- method detection limits (MDL)
+- extracted internal standard (EIS) recovery rates (RR) or standard response deviations (RSD)
+- ion abundance ratio deviations (IARD).
 Generates plots, flags concentration values according to QAQC criteria, and writes results to excel. Creates long format table (.csv) for data publications.
-The analysis is targeted at the precedure of the Lohmann lab located at University of Rhode Island at the graduate school of oceanography.
+The analysis is targeted at the precedure of the Lohmann lab located at University of Rhode Island at the Graduate School of Oceanography.
 
 ### Workflow
 Collect all input data in a project directory of your choice and run the script **create_project_folder.ipynb**. Make sure you set the path variable **project_folder** accordingly. The script creates templates for your input parameters (recovery_or_standard_response_thresholds.csv, rt_iar_thresholds_channel_selection.csv, sample_parameters.csv and simulation_parameters.csv) based on sample and compound names extracted from your raw data.
