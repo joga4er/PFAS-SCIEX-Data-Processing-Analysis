@@ -5,6 +5,7 @@ It takes raw data (exported tables from SCIEX Analyst Software) from two methods
 - method detection limits (MDL)
 - extracted internal standard (EIS) recovery rates (RR) or standard response deviations (RSD)
 - ion abundance ratio deviations (IARD).
+
 Generates plots, flags concentration values according to QAQC criteria, and writes results to excel. Creates long format table (.csv) for data publications.
 The analysis is targeted at the precedure of the Lohmann lab located at University of Rhode Island at the Graduate School of Oceanography.
 
