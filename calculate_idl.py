@@ -1,4 +1,7 @@
-### Calculated instrumentation detection limits from calibration data
+"""
+Calculates instrumentation detection limits from calibration data.
+Adopt the function input in the bottom lines of the script and run the script to calculate instrumentation detection limits from raw data.
+"""
 from typing import Optional
 import pandas as pd
 import numpy as np
@@ -8,9 +11,23 @@ from utils import clean_up_data, reassign_tof_nis_to_eis, get_tof_and_msms_compo
 
 # global variable definitions
 standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
-hrms_identifier = '_HRMS'
 
-def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_extended: Optional[str],):
+def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Optional[str], filepath_extended: Optional[str],):
+    """Reads in raw calibration data and automatically evaluates instrumentation detection limits based on signal to noise ratios of 10 for each compound and each channel.
+    The results are saved as .csv in the lab_parameters subfolder.
+
+    :param method_name: Name of the method, ideally in the format: {year}_{matrix}_{first name of researcher}. Example: 2025_serum_jingmei
+    :type method_name: str
+    :param hrms_identifier: Ending of compound names used to identify high-resolution mass spectrometry channels. Examples: '_TOF MS' or '_HRMS'
+    :type hrms_identifier: str
+    :param filepath_core: Path to the raw data file of the core method containing calibration data from which IDL is calculated.
+    :type filepath_core: Optional[str]
+    :param filepath_extended: Path to the raw data file of the extended method containing calibration data from which IDL is calculated.
+    :type filepath_extended: Optional[str]
+    :raises ImportError: If the filepath_core does not point to a .csv or .txt. file.
+    :raises ImportError: If the filepath_extended does not point to a .csv or .txt. file.
+    :raises ValueError: If no file paths are provided for core or extended data.
+    """
 
     # Define columns of input which are needed for further processes:
     columns_considered = [
@@ -60,7 +77,7 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
     else:
         raise ValueError('At least one file path must be provided for core or extended data.')
     
-    data['Batch Name'] = matrix_name  # add batch name to data
+    data['Batch Name'] = method_name  # add batch name to data
     
     # extract sample names and compound names from raw data
     sample_list = get_sample_id_and_name(data)
@@ -89,7 +106,7 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
                     (data['Component Name'] == compound) & (data['Sample Index'].isin(indices))
                 ), :]
 
-    idl_data = pd.DataFrame(columns=["Sample Code", "Unit"] + compounds['MSMS Compound Name'].tolist())
+    idl_data = pd.DataFrame(columns=["Sample Code", "Unit"] + compounds['MSMS Compound Name'].fillna(compounds['HRMS Compound Name']).tolist())
     idl_data.loc[0, 'Sample Code'] = 'MSMS IDL'
     idl_data.loc[1, 'Sample Code'] = 'MSMS LOQ'
     idl_data.loc[2, 'Sample Code'] = 'HRMS IDL'
@@ -131,7 +148,10 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
                 ), :]
                 idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
                 idl = max(idl, min_idl)
-                if msms_compound is not np.nan:
+                if msms_compound is np.nan:
+                    idl_data.loc[2, hrms_compound] = round(idl, ndigits=3)
+                    idl_data.loc[3, hrms_compound] = previous['Actual Concentration'].mean()
+                else:
                     idl_data.loc[2, msms_compound] = round(idl, ndigits=3)
                     idl_data.loc[3, msms_compound] = previous['Actual Concentration'].mean()
                 break
@@ -139,14 +159,14 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
                 min_idl = previous['Actual Concentration'].mean() # ensure that IDL is not smaller than point where peak was not detected.
 
     idl_data.to_csv(
-        os.path.join('lab_parameters', f'{matrix_name}_idl.csv'), index=False, encoding='utf-8'
+        os.path.join('lab_parameters', f'{method_name}_idl.csv'), index=False, encoding='utf-8'
     )
 
 
 if __name__ == "__main__":
     calculate_idls(
-        matrix_name='2025_serum_jingmei',
-        filepath_core=r'jingmei\20250710_serum_louisville_core.txt',
-        filepath_extended = None,
+        method_name='2024_test_anonymous',
+        hrms_identifier='_TOF MS',
+        filepath_core=r'test\241031_test_data_core.txt',
+        filepath_extended = r'test\241031_test_data_extended.txt',
     )
-    # filepath_extended=r'jarod\grills\20250724_Grills_PW_extended.txt',
