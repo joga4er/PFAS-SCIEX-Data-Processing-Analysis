@@ -1,13 +1,14 @@
 ### Calculated instrumentation detection limits from calibration data
 from typing import Optional
 import pandas as pd
+import numpy as np
+import os
 
 from utils import clean_up_data, reassign_tof_nis_to_eis, get_tof_and_msms_compounds, get_sample_id_and_name
 
 # global variable definitions
 standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
 hrms_identifier = '_HRMS'
-import os
 
 def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_extended: Optional[str],):
 
@@ -96,9 +97,9 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
     idl_data['Unit'] = 'ng/sample'
     
     calibration_data = data.loc[data['Sample Type'] == 'Standard', :]
-    for (msms_compound, tof_compound) in zip(compounds['MSMS Compound Name'].tolist(), compounds['HRMS Compound Name'].tolist()):
+    for (msms_compound, hrms_compound) in zip(compounds['MSMS Compound Name'].tolist(), compounds['HRMS Compound Name'].tolist()):
         msms_data = calibration_data.loc[calibration_data['Component Name'] == msms_compound, :]
-        tof_data = calibration_data.loc[calibration_data['Component Name'] == tof_compound, :]
+        hrms_data = calibration_data.loc[calibration_data['Component Name'] == hrms_compound, :]
         min_idl = 1e-3
         for calibration_point in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
             previous = msms_data.loc[(
@@ -119,19 +120,20 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
                 min_idl = previous['Actual Concentration'].mean()
         min_idl = 1e-3
         for calibration_point in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
-            previous = tof_data.loc[(
-                (tof_data['Sample ID'] == f'CS{calibration_point}') &
-                (tof_data['Used'] == True)
+            previous = hrms_data.loc[(
+                (hrms_data['Sample ID'] == f'CS{calibration_point}') &
+                (hrms_data['Used'] == True)
             ), :]
             if previous['Signal / Noise'].isna().sum() == 0:
-                this_point = tof_data.loc[(
-                    (tof_data['Sample ID'] == f'CS{calibration_point + 1}') &
-                    (tof_data['Used'] == True)
+                this_point = hrms_data.loc[(
+                    (hrms_data['Sample ID'] == f'CS{calibration_point + 1}') &
+                    (hrms_data['Used'] == True)
                 ), :]
                 idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
                 idl = max(idl, min_idl)
-                idl_data.loc[2, msms_compound] = round(idl, ndigits=3)
-                idl_data.loc[3, msms_compound] = previous['Actual Concentration'].mean()
+                if msms_compound is not np.nan:
+                    idl_data.loc[2, msms_compound] = round(idl, ndigits=3)
+                    idl_data.loc[3, msms_compound] = previous['Actual Concentration'].mean()
                 break
             else:
                 min_idl = previous['Actual Concentration'].mean() # ensure that IDL is not smaller than point where peak was not detected.
@@ -143,7 +145,8 @@ def calculate_idls(matrix_name: str, filepath_core: Optional[str], filepath_exte
 
 if __name__ == "__main__":
     calculate_idls(
-        matrix_name='2025_pfas_default',
-        filepath_core=r'jarod\grills\20250724_Grills_PW_core.txt',
-        filepath_extended=r'jarod\grills\20250724_Grills_PW_extended.txt',
+        matrix_name='2025_serum_jingmei',
+        filepath_core=r'jingmei\20250710_serum_louisville_core.txt',
+        filepath_extended = None,
     )
+    # filepath_extended=r'jarod\grills\20250724_Grills_PW_extended.txt',
