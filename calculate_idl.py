@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import os
 
-from utils import clean_up_data, reassign_tof_nis_to_eis, get_tof_and_msms_compounds, get_sample_id_and_name
+from utils import clean_up_data, reassign_tof_nis_to_eis, get_hrms_and_msms_compounds, get_sample_id_and_name
 
 # global variable definitions
 standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
@@ -89,7 +89,9 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
     data = reassign_tof_nis_to_eis(data=data)
 
     # get compounds dataframe and delete 'useless compounds'
-    compounds, delete_compounds = get_tof_and_msms_compounds(data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers)
+    compounds, delete_compounds, compounds_available = get_hrms_and_msms_compounds(
+        data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers
+        )
 
     # delete detected compounds accordingly. 
     # Usualy HRMS channels from the core method have to be deleted, because they also occur in the extended method, where they are integrated with more care.
@@ -106,7 +108,7 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
                     (data['Component Name'] == compound) & (data['Sample Index'].isin(indices))
                 ), :]
 
-    idl_data = pd.DataFrame(columns=["Sample Code", "Unit"] + compounds['MSMS Compound Name'].fillna(compounds['HRMS Compound Name']).tolist())
+    idl_data = pd.DataFrame(columns=["Sample Code", "Unit"] + compounds_available)
     idl_data.loc[0, 'Sample Code'] = 'MSMS IDL'
     idl_data.loc[1, 'Sample Code'] = 'MSMS LOQ'
     idl_data.loc[2, 'Sample Code'] = 'HRMS IDL'
@@ -149,8 +151,8 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
                 idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
                 idl = max(idl, min_idl)
                 if msms_compound is np.nan:
-                    idl_data.loc[2, hrms_compound] = round(idl, ndigits=3)
-                    idl_data.loc[3, hrms_compound] = previous['Actual Concentration'].mean()
+                    idl_data.loc[2, hrms_compound[:-1 * len(hrms_identifier)]] = round(idl, ndigits=3)
+                    idl_data.loc[3, hrms_compound[:-1 * len(hrms_identifier)]] = previous['Actual Concentration'].mean()
                 else:
                     idl_data.loc[2, msms_compound] = round(idl, ndigits=3)
                     idl_data.loc[3, msms_compound] = previous['Actual Concentration'].mean()
