@@ -10,7 +10,9 @@ Generates plots, flags concentration values according to QAQC criteria, and writ
 The analysis is targeted at the precedure of the Lohmann lab located at University of Rhode Island at the Graduate School of Oceanography.
 
 ### Workflow
-Collect all input data in a project directory of your choice and run the script **create_project_folder.ipynb**. Make sure you set the path variable **project_folder** accordingly. The script creates templates for your input parameters (recovery_or_standard_response_thresholds.csv, rt_iar_thresholds_channel_selection.csv, sample_parameters.csv and simulation_parameters.csv) based on sample and compound names extracted from your raw data.
+Collect all input data in a project directory of your choice. If the method you created is new, you will have to calculate your instrumentation detection limits using the **calculate_idl.py** script.
+
+Run the script **create_project_folder.ipynb**. Make sure you set the path variable **project_folder** accordingly. The script creates templates for your input parameters (recovery_or_standard_response_thresholds.csv, rt_iar_thresholds_channel_selection.csv, sample_parameters.csv and simulation_parameters.csv) based on sample and compound names extracted from your raw data.
 You find detailed instructions in the notebook itself.
 
 Once you set all input parameters accordingly, make sure you use the right path as project folder and run the script **data_analysis.ipynb**. It will generate an excel spreadsheet with detailed QAQC results, as well as a .csv long format table suitable for data sharing and publications.

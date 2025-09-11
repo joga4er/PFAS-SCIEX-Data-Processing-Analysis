@@ -297,9 +297,9 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame) -> pd.DataFrame
 
     return data
 
-def get_tof_and_msms_compounds(
+def get_hrms_and_msms_compounds(
         data: pd.DataFrame, sample_list: pd.DataFrame, hrms_identifier: str, standard_identifiers: str,
-        ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Order of PFAS compounds is conserved and the names are split to the (MS/MS) channel, and the HRMS channel. If either channel is not available or available twice,
     it is saved to a dataframe meant to delete compounds at a later stage.
 
@@ -313,7 +313,8 @@ def get_tof_and_msms_compounds(
     :type standard_identifiers: str
     :return: - compounds: Dataframe containing compounds in right order and the information of which method is used to extract the information from.
              - delete_compounds: Dataframe containing compounds which should be deleted, because they do not have a MSMS or HRMS counterpart or two identicals exist.
-    :rtype: tuple[pd.DataFrame, pd.DataFrame]
+             - compounds_available: list containing all compounds available in the raw data in the predefined order with MSMS name
+    :rtype: tuple[pd.DataFrame, pd.DataFrame, list]
     """
 
     # find suitable sample to iterate over compound names
@@ -372,8 +373,11 @@ def get_tof_and_msms_compounds(
             skip_compounds.append(compound)  # make sure the HRMS compound is not considered more than once
             skip_compounds.append(compound[:-(1) * len(hrms_identifier)])  # make sure the MS MS compound is not considered twice
         else:  # in case compound is from MSMS channel
-             # get related HRMS compound
-            hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound + hrms_identifier,:]
+            # get related HRMS compound
+            if compound.endswith('confirmation'):  # assign HRMS channel to confirmation compounds as well
+                hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound[:-13] + hrms_identifier, :]
+            else:
+                hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound + hrms_identifier, :]
             # if no hrms_compound is available, make sure component is deleted at a later point
             if hrms_compound.empty:
                 compounds.append(
@@ -396,13 +400,22 @@ def get_tof_and_msms_compounds(
                     )
                     delete_compounds.append({'Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'core'})
 
-            skip_compounds.append(compound)  # make sure the HRMS compound is not considered more than once
-            skip_compounds.append(compound + hrms_identifier)  # make sure the MS MS compound is not considered twice
+            skip_compounds.append(compound)  # make sure the MS/MS compound is not considered more than once
+            skip_compounds.append(compound + hrms_identifier)  # make sure the HRMS compound is not considered twice
     compounds = pd.DataFrame(compounds)
     delete_compounds = pd.DataFrame(delete_compounds)
-    return(compounds, delete_compounds)
 
-def get_tof_and_msms_standards(
+    # read in predefined order of compounds
+    compounds_sorted = pd.read_csv(os.path.join('lab_parameters', 'compound_order.csv'), usecols=[0,1])
+    # construct list of compounds from available channels
+    compounds_available = compounds['MSMS Compound Name'].fillna(compounds['HRMS Compound Name'])
+    compounds_available = compounds_available.str.replace(hrms_identifier, '').to_list()
+    # sort available compounds according to predefined order
+    compounds_available = [compound for compound in compounds_sorted['Name'] if compound in compounds_available]
+
+    return(compounds, delete_compounds, compounds_available)
+
+def get_hrms_and_msms_standards(
         data: pd.DataFrame, sample_list: pd.DataFrame, hrms_identifier: str, standard_identifiers: str, eis_identifier: str, nis_identifier: str,
         ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Order of standards is conserved and the names are split to the (MS/MS) channel, and the HRMS channel. If either channel is not available,
@@ -688,9 +701,9 @@ if __name__ == "__main__":
 
     standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
     hrms_identifier = '_HRMS'
-    compounds, delete_compounds = get_tof_and_msms_compounds(
+    compounds, delete_compounds, _ = get_hrms_and_msms_compounds(
         data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers,
         )
-    standards, delete_standards = get_tof_and_msms_standards(
+    standards, delete_standards = get_hrms_and_msms_standards(
         data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers, eis_identifier='EIS', nis_identifier='NIS',
     )
