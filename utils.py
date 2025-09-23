@@ -486,10 +486,10 @@ def get_hrms_and_msms_standards(
             if len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 0:
                 delete_standards.append({'Compound Name': standard})
             elif len(msms_standard_v2) == 1 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 0:
-                standards.append({'MSMS Standard Name': msms_standard_v2.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': standard[:3]})
-                skip_standards.append(msms_nis_standard_v1.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
+                standards.append({'MSMS Standard Name': msms_standard_v2.loc[:, 'Component Name'].values[0], 'HRMS Standard Name': standard, 'Standard Type': standard[:3]})
+                skip_standards.append(msms_standard_v2.loc[:, 'Component Name'].values[0])  # make sure the MSMS standard is not considered more than once
             elif len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 1 and len(msms_nis_standard_v1) == 0:
-                standards.append({'MSMS Standard Name': msms_eis_standard_v1.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': eis_identifier})
+                standards.append({'MSMS Standard Name': msms_eis_standard_v1.loc[:, 'Component Name'].values[0], 'HRMS Standard Name': standard, 'Standard Type': eis_identifier})
                 skip_standards.append(msms_eis_standard_v1.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
             elif len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 1:
                 standards.append({'MSMS Standard Name': msms_nis_standard_v1.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': nis_identifier})
