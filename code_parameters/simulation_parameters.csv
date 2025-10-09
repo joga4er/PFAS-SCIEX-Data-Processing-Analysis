@@ -1,0 +1,12 @@
+Parameter Name,Parameter Description,Parameter Value
+EIS identifier,"Repeating substring, which is used to identify extracted internal standards (EIS), formally known as IDA, from compound name.",EIS
+NIS identifier,"Repeating substring, which is used to identify non-extracted internal standards (NIS), formally known as IPS, from compound name.",NIS
+HRMS identifier,Ending of compound names (column Component Name in SCIEX) for compounds and standards from the HRMS channel.,_HRMS
+calibration midpoint identifier,"Repeating substring, which is used to identify calibration midpoint from sample name.",CS6
+output name,Name of the output files generated from the Code,Louisville_Human_Plasma
+calibration reference,"To choose reference data from the calibration (midpoint) for QAQC, you can use data from initial calibration, or data from continuous calibration verification (CCV) 
+Set parameter to calibration if you want to use data from initial calibration as reference. 
+Set parameter to ccv if you want to use data from continuos calibration verification as reference.",calibration
+method identifier,{Year of method creation}_{matrix type}_{name of researcher who created the method},2025_serum_jingmei
+standard concentration,"Available options: 'spiked_per_sample', 'spiked_per_ml_sample'.",spiked_per_sample
+method to calculate recoveries,"Available options: 'eis', 'compound'.",eis

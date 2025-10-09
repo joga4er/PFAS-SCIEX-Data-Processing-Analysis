@@ -1,0 +1,36 @@
+,batch name,sample id,alternative name (used in results),volume/weight/number of samples,unit (e.g. g/mL/sample),used for mdl calculation,temperature in C,deployment time in days,dilution factor
+28,Louisville_Human_Plasma,CS6,PFAS CS6 4ng/ml,1,sample,FALSE,,,1
+45,Louisville_Human_Plasma,QCS0,PFAS QCS0 0ng/ml,1,sample,FALSE,,,1
+46,Louisville_Human_Plasma,QCS0,PFAS QCS0 0ng/ml,1,sample,FALSE,,,1
+47,Louisville_Human_Plasma,25/3484,PB1,1,sample,TRUE,,,1
+48,Louisville_Human_Plasma,25/3485,PB2,1,sample,TRUE,,,1
+49,Louisville_Human_Plasma,25/3486,PB3,1,sample,TRUE,,,1
+50,Louisville_Human_Plasma,25/3487,M1,1,sample,FALSE,,,1
+51,Louisville_Human_Plasma,25/3488,M2,1,sample,FALSE,,,1
+52,Louisville_Human_Plasma,25/3489,M3,1,sample,FALSE,,,1
+53,Louisville_Human_Plasma,25/3490,AIM 01,0.5,mL,FALSE,,,1
+54,Louisville_Human_Plasma,25/3491,AIM 01,0.5,mL,FALSE,,,1
+55,Louisville_Human_Plasma,25/3492,AIM 02,0.5,mL,FALSE,,,1
+56,Louisville_Human_Plasma,25/3493,AIM 02,0.5,mL,FALSE,,,1
+57,Louisville_Human_Plasma,25/3494,AIM 03,0.5,mL,FALSE,,,1
+58,Louisville_Human_Plasma,25/3495,AIM 04,0.5,mL,FALSE,,,1
+59,Louisville_Human_Plasma,25/3496,AIM 05,0.5,mL,FALSE,,,1
+60,Louisville_Human_Plasma,25/3497,AIM 06,0.5,mL,FALSE,,,1
+61,Louisville_Human_Plasma,25/3498,AIM 07,0.5,mL,FALSE,,,1
+62,Louisville_Human_Plasma,25/3499,AIM 08,0.5,mL,FALSE,,,1
+63,Louisville_Human_Plasma,25/3500,AIM 09,0.5,mL,FALSE,,,1
+64,Louisville_Human_Plasma,25/3501,AIM 10,0.5,mL,FALSE,,,1
+65,Louisville_Human_Plasma,25/3502,AIM 11,0.5,mL,FALSE,,,1
+66,Louisville_Human_Plasma,25/3503,AIM 12,0.5,mL,FALSE,,,1
+67,Louisville_Human_Plasma,25/3504,AIM 13,0.5,mL,FALSE,,,1
+68,Louisville_Human_Plasma,25/3505,AIM 14,0.5,mL,FALSE,,,1
+69,Louisville_Human_Plasma,25/3506,AIM 15,0.5,mL,FALSE,,,1
+70,Louisville_Human_Plasma,25/3507,AIM 16,0.5,mL,FALSE,,,1
+71,Louisville_Human_Plasma,25/3508,AIM 18,0.5,mL,FALSE,,,1
+72,Louisville_Human_Plasma,25/3509,AIM 19,0.5,mL,FALSE,,,1
+73,Louisville_Human_Plasma,25/3510,AIM 21,0.5,mL,FALSE,,,1
+74,Louisville_Human_Plasma,25/3511,C1,0.5,mL,FALSE,,,1
+75,Louisville_Human_Plasma,25/3512,C2,0.5,mL,FALSE,,,1
+76,Louisville_Human_Plasma,25/3513,C3,0.5,mL,FALSE,,,1
+77,Louisville_Human_Plasma,25/3514,C4,0.5,mL,FALSE,,,1
+78,Louisville_Human_Plasma,25/3515,C5,0.5,mL,FALSE,,,1

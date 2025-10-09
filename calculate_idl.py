@@ -130,7 +130,7 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
                     (msms_data['Sample ID'] == f'CS{calibration_point + 1}') &
                     (msms_data['Used'] == True)
                 ), :]
-                idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
+                idl = 3 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
                 idl = max(idl, min_idl)
                 idl_data.loc[0, msms_compound] = round(idl, ndigits=3)
                 idl_data.loc[1, msms_compound] = previous['Actual Concentration'].mean()
@@ -148,7 +148,7 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
                     (hrms_data['Sample ID'] == f'CS{calibration_point + 1}') &
                     (hrms_data['Used'] == True)
                 ), :]
-                idl = 10 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
+                idl = 3 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
                 idl = max(idl, min_idl)
                 if msms_compound is np.nan:
                     idl_data.loc[2, hrms_compound[:-1 * len(hrms_identifier)]] = round(idl, ndigits=3)
@@ -167,8 +167,10 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
 
 if __name__ == "__main__":
     calculate_idls(
-        method_name='2024_test_anonymous',
-        hrms_identifier='_TOF MS',
-        filepath_core=r'test\241031_test_data_core.txt',
-        filepath_extended = r'test\241031_test_data_extended.txt',
+        method_name='2025_plankton_jitka',
+        hrms_identifier='_HRMS',
+        filepath_core=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analysis\jitka\plankton\20250829_PFAS_MMA_Plankton_core.txt',
+        filepath_extended=None,
     )
+
+# filepath_extended = r'test\241031_test_data_extended.txt',
