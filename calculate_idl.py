@@ -172,5 +172,3 @@ if __name__ == "__main__":
         filepath_core=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analysis\jingmei\Louisville_Human_Plasma_core.txt',
         filepath_extended=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analysis\jingmei\Louisville_Human_Plasma_extended.txt',
     )
-
-# filepath_extended = r'test\241031_test_data_extended.txt',

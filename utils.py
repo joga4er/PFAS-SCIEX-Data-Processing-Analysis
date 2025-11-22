@@ -383,6 +383,8 @@ def get_hrms_and_msms_compounds(
             # get related HRMS compound
             if compound.endswith('confirmation'):  # assign HRMS channel to confirmation compounds as well
                 hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound[:-13] + hrms_identifier, :]
+            elif compound.endswith('2'):
+                hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound[:-1] + hrms_identifier, :]
             else:
                 hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound + hrms_identifier, :]
             # if no hrms_compound is available, make sure component is deleted at a later point
