@@ -10,7 +10,7 @@ from math import log10, floor
 from typing import Optional
 
 # functions
-def read_in_data_files(project_folder: str) -> pd.DataFrame:
+def read_in_data_files(project_folder: str) -> tuple[pd.DataFrame, str]:
     """Reads in all raw data files and merges them in a common pandas data frame.
     Ensures that all sample names from core method files end with Core,
     and all sample names from extended method files end with Extended.
@@ -20,6 +20,8 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
     :raises ImportError: Data files must be of either CSV or TXT type
     :return: Data frame containing merged raw data of all files.
     :rtype: pd.DataFrame
+    :return: Name of output file from first raw data file name
+    :rtype: str
     """
 
     # Check if project folder exists and throw an error if it does not.
@@ -59,12 +61,17 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
     extended_calibration_detected = False  # set flag variables to be able to delete calibration data if multiple batches are available
 
     # iterate over all files in project folder
+    output_name = ''
     for file in raw_data_files_list:
         # extract relevant information from file
         base_name = ".".join(file.split(".")[:-1])
         file_ending = file.split(".")[-1]
         batch_name = "_".join(base_name.split("_")[:-1])
         batch_type = base_name.split("_")[-1]
+
+        # save batch_name if empty
+        if len(output_name) == 0:
+            output_name = batch_name 
 
         # read in file
         if file_ending == 'csv':
@@ -123,7 +130,7 @@ def read_in_data_files(project_folder: str) -> pd.DataFrame:
     # Only work with data, which is 'Used' -> Relevant for Calibration, where some of the calibration points are excluded for some compounds
     data.loc[~data['Used'],  ['Calculated Concentration', 'Actual Concentration', 'Area', 'Retention Time', 'IS Retention Time']] = np.nan
     
-    return data
+    return(data, output_name)
 
 # function to extract and map indices
 def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
@@ -376,6 +383,8 @@ def get_hrms_and_msms_compounds(
             # get related HRMS compound
             if compound.endswith('confirmation'):  # assign HRMS channel to confirmation compounds as well
                 hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound[:-13] + hrms_identifier, :]
+            elif compound.endswith('2'):
+                hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound[:-1] + hrms_identifier, :]
             else:
                 hrms_compound = compounds_sorted.loc[compounds_sorted['Component Name'] == compound + hrms_identifier, :]
             # if no hrms_compound is available, make sure component is deleted at a later point
@@ -568,14 +577,14 @@ def parse_project_folder_structure(project_folder: str) -> None:
             "There is no subfolder 'code_parameters' in your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
-    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'rt_iar_thresholds_channel_selection.csv')):
+    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'compound_parameters.csv')):
         raise ImportError(
-            "There is no rt_iar_thresholds_channel_selection.csv in code_parameters or your project folder." \
+            "There is no compound_parameters.csv in code_parameters or your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
-    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'recovery_or_standard_response_thresholds.csv')):
+    if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'eis_parameters.csv')):
         raise ImportError(
-            "There is no recovery_or_standard_response_thresholds.csv in code_parameters or your project folder." \
+            "There is no eis_parameters.csv in code_parameters or your project folder." \
             "Make sure you followed all the instructions indicated in the create_project_folder.ipynb notebook."
             )
     if not os.path.isfile(os.path.join(project_folder, 'code_parameters', 'sample_parameters.csv')):
@@ -694,13 +703,13 @@ def color_fields(
     workbook.close()
 
 if __name__ == "__main__":
-    data = read_in_data_files(project_folder=r'jarod/grills')
+    data, output_name = read_in_data_files(project_folder=r'test')
     sample_list = get_sample_id_and_name(data=data)
     data = clean_up_data(data=data, sample_list=sample_list)
     data = reassign_tof_nis_to_eis(data)
 
     standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
-    hrms_identifier = '_HRMS'
+    hrms_identifier = '_TOF MS'
     compounds, delete_compounds, _ = get_hrms_and_msms_compounds(
         data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers,
         )

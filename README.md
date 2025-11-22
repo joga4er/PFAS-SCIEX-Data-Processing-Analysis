@@ -1,47 +1,72 @@
-# 1 Data Analysis Pipeline for targeted LCMS Analysis (data_analysis.ipynb)
-Jupyter notebook (python based), which processes data from Sciex QTOF high resolution liquit chromatography - tandem mass spectroscopy (LCMS-MS) and evaluates quality control criteria in line with EPA1633A.
-It takes raw data (exported tables from SCIEX Analyst Software) from two methods containing targeted PFAS compounds, combines the methods for each batch, and computes the following :
-- retention time differences (RTD) to related extracted internal standard
-- method detection limits (MDL)
-- extracted internal standard (EIS) recovery rates (RR) or standard response deviations (RSD)
-- ion abundance ratio deviations (IARD).
+# Targeted LC-MS/MS Quality Control and Data Integration Pipeline for PFAS Analysis
+The workflow processes high-resolution LC-MS/MS data generated on a SCIEX QTOF instrument and evaluates quality control metrics following EPA 1633A guidelines.
 
-Generates plots, flags concentration values according to QAQC criteria, and writes results to excel. Creates long format table (.csv) for data publications.
-The analysis is targeted at the precedure of the Lohmann lab located at University of Rhode Island at the Graduate School of Oceanography.
+### Workflow Overview
 
-### Workflow
-Collect all input data in a project directory of your choice. If the method you created is new, you will have to calculate your instrumentation detection limits using the **calculate_idl.py** script.
+##### Prepare your project folder
+Collect all raw input files (exported text files from SCIEX Analyst) into a dedicated project directory.
+Ensure that this project directory is located in the same parent folder as the scripts (`data_analysis.ipynb`, `create_project_folder.ipynb`, and `utils.py`).
 
-Run the script **create_project_folder.ipynb**. Make sure you set the path variable **project_folder** accordingly. The script creates templates for your input parameters (recovery_or_standard_response_thresholds.csv, rt_iar_thresholds_channel_selection.csv, sample_parameters.csv and simulation_parameters.csv) based on sample and compound names extracted from your raw data.
-You find detailed instructions in the notebook itself.
+##### Make sure your instrumentation detection limits area available.
+IDL values for various methods are deposited in the lab_parameters directory.
+If using a new method, calculate instrument detection limits (IDLs) with: `calculate_idl.py`.
 
-Once you set all input parameters accordingly, make sure you use the right path as project folder and run the script **data_analysis.ipynb**. It will generate an excel spreadsheet with detailed QAQC results, as well as a .csv long format table suitable for data sharing and publications.
+##### Generate template parameter files
+Open `create_project_folder.ipynb` and set your **project_folder** variable, so that it points to the project directory containing your raw data.
+This notebook detects sample and compound names in your raw data and creates input parameter templates:
+   - `eis_paramters.csv`
+   - `compound_parameters.csv`
+   - `sample_parameters.csv`
+   - `simulation_parameters.csv`
+   - `mdl_parameters.csv`
 
-Note: Both jupyter notebooks are using functions defined in **utils.py** and data deposited within the folder lab_parameters. In case you are manually downloading scripts, make sure that utils.py and the two mentioned jupyter notebooks are located in the same directory, as well as the data folder lab_parameters.
+Once the script run successfully you will find the input files in your project folder under **simulation_parameters**.
+Update these files according to your study. Detailed instructions are included in the notebook.
 
-##### input data and filenameing conventions
-- exported data from Sciex Analyst software. The filename has to end either with '_core' for results originating from the core method, or with '_extended' for results originating from the extended method. The batches to be combined must have the same base name before the fileending: e.g. batch_1_core.txt, and batch_1_extended.txt.
-- a test data set is available in the test project folder "test".
+##### Run the main analysis 
+Execute `data_analysis.ipynb`, ensuring the `project_folder` variable is set correctly.  
+The notebook will generate:
+   - an Excel QA/QC report
+   - a long-format `.csv` table  
+Both will be accessible in your project folder under **processed_data**.
 
-##### software
-To run the jupyter notebook, you will need any kind of integrated code environment (IDE).
-E. g. you can install Anaconda and start jupyter lab from there. Alternatively cloud solutions like google colab can be used.
+##### Dependencies & Folder Structure
 
-##### definitions
-- **extracted internal standards (EIS)**: mass-labeled internal standards spiked to the sample before the analytical process (extraction, clean-up, etc.), formally known as **IDA**.
-- **non-extracted internal standards (NIS)**: mass-labeled internal standards spiked to the sample after the analytical process (extraction, clean-up, etc), but before LCMS/MS, also known as **injection standard**, formally known as **IPS**.
-- **target analytes**: PFAS compounds to be quantified in LCMS/MS analysis, also known as **native compounds**.
-- **HRMS** channel: high resolution mass spectrometry channel, which screens for ionized native compounds. Used to confirm the detection of native compounds. Formally known as time of flight **TOF** channel.
-- **MS/MS** channel: mass spectrometry channel, which screens for ionized, fragmented ions. Used to quantify concentration of native compounds. 
+Both notebooks `create_project_folder.ipynb` and `data_analysis.ipynb` rely on:
+- `utils.py`
+- **lab_parameters/**
+Ensure these are stored together if downloaded manually.
 
-# 2 Pipeline to link lcms data and observe correlations (link_data.ipynb)
-Jupyter notebook (R based), which links results from lcms data analysis pipeline and proteomics results, evaluates Pearson correlation coefficients and p-values, and creates plots.
+### Input Data & Naming Conventions
+Input files must come from **SCIEX Analyst** exported tables. These are either .csv or .txt files.
 
-##### input data
-- .csv file containing name of all samples and links to the sample name in lcms and proteomics respectively
-- .xlsx containing lcms results (will be combined to data analysis workflow above in the future)
-- .xlsx containg proteomics results
-- at this stage no test data set is publicly available.
+Files must end with:
+- `_core` → data from the core method  
+- `_extended` → data from the extended method  
+
+Files to be combined from the same batch must share the same prefix:
+Example:
+- batch_1_core.txt
+- batch_1_extended.txt
+
+A complete test set is available in the **test/** directory.
+
+### Software Requirements
+
+You may run the pipeline in:
+- **JupyterLab** (via Anaconda)
+- **Google Colab**
+- Any environment supporting Jupyter notebooks
+
+### Definitions
+
+| Term | Description |
+|------|-------------|
+| **Extracted Internal Standards (EIS)** | Mass-labeled standards added **before extraction** (formerly *IDA*). |
+| **Non-Extracted Internal Standards (NIS)** | Standards added **after extraction**, before injection (also *IPS*). |
+| **Target analytes** | PFAS native compounds quantified by LC-MS/MS. |
+| **HRMS channel** | High-resolution TOF channel used to confirm native ions. |
+| **MS/MS channel** | Fragmentation channel used for quantification. |
 
 ### Contact
 johanna.ganglbauer@uri.edu
