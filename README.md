@@ -7,7 +7,7 @@ The workflow processes high-resolution LC-MS/MS data generated on a SCIEX QTOF i
 Collect all raw input files (exported text files from SCIEX Analyst) into a dedicated project directory.
 Ensure that this project directory is located in the same parent folder as the scripts (`data_analysis.ipynb`, `create_project_folder.ipynb`, and `utils.py`).
 
-##### Make sure your instrumentation detection limits area available.
+##### Make sure your instrumentation detection limits are available.
 IDL values for various methods are deposited in the lab_parameters directory.
 If using a new method, calculate instrument detection limits (IDLs) with: `calculate_idl.py`.
 
