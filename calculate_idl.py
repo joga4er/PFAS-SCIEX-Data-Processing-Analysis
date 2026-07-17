@@ -167,8 +167,10 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
 
 if __name__ == "__main__":
     calculate_idls(
-        method_name='2025_serum_jingmei',
+        method_name='2026_shellfish_paula',
         hrms_identifier='_HRMS',
-        filepath_core=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analysis\jingmei\Louisville_Human_Plasma_core.txt',
-        filepath_extended=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analysis\jingmei\Louisville_Human_Plasma_extended.txt',
+        filepath_core=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analysis\paula\20260318_Cape_Cod_Shellfish_Prelim_w_matrix_curve_core.txt',
+        filepath_extended=None,
     )
+
+    # filepath_extended=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analy
