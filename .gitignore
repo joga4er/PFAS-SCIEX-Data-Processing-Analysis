@@ -15,5 +15,7 @@ jingmei
 jitka
 justin
 paola
-test/processed_data
-test/code_parameters
+test/sciex/processed_data
+test/sciex/code_parameters
+test/waters/processed_data
+test/waters/code_parameters
