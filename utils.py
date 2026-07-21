@@ -9,14 +9,87 @@ from openpyxl.styles import PatternFill
 from math import log10, floor
 from typing import Optional
 
+from sklearn import utils
+
+def convert_waters_to_sciex(data: pd.DataFrame, hrms_identifier: str) -> pd.DataFrame:
+    """Converts Waters data format to Sciex data format. This is necessary, 
+    because the data processing pipeline was developed for Sciex data format.
+
+    :param data: Data frame containing merged raw data of all files.
+    :type data: pd.DataFrame
+    :param hrms_identifier: Identifier for high resolution mass spectrometry channel, usually '_HRMS' or '_TOF MS'.
+    :type hrms_identifier: str
+    :return: Data frame containing merged raw data of all files in Sciex data format.
+    :rtype: pd.DataFrame
+    """
+    
+    # rename Waters columns to match Sciex format
+    data = data.rename(columns={
+        "Injection Name": "Sample Name", 
+        "Compound Name": "Component Name", "Linked Internal Standard": "IS Name",
+        "Acquisition Date Time": "Acquisition Date & Time", "Included in Calibration": "Used",
+        "Expected Concentration": "Actual Concentration", "Signal to Noise": "Signal / Noise"
+        })
+    
+    # add sample ID and sample index
+    # Unique Sample ID: combine Sample Name and Acquisition Date Time
+    data["Sample ID"] = data["Sample Name"].astype(str) + "_" + data["Acquisition Date & Time"].astype(str)
+
+    # Sample Index: increments with each new Sample ID
+    data["Sample Index"] = pd.factorize(data["Sample ID"])[0] + 1
+    
+    # convert "Used" column to boolean
+    data["Used"] = data["Used"].eq("Yes")
+    data.loc[data['Sample Type'] != 'Standard', 'Used'] = True
+    data.loc[data['Compound Type'] == 'Internal Standard', 'Used'] = True
+
+    # Original rows
+    orig = data.copy()
+    orig["Area"] = orig["Response"]
+    orig["Retention Time"] = orig["Observed RT (min)"]
+
+    # Qual rows
+    qual = data.copy()
+
+    # extract only first value for Qual Ions Responses and Qual Ions Observed RTs
+    for column_name in [
+        'Qual Ions Responses', 'Qual Ions Observed RTs (min)', 'Qual Ions Signal to Noise'
+        ]:
+        qual[column_name] = qual[column_name].astype(str).str.split("|").str[0].replace(
+            {"": np.nan, "nan": np.nan, "Not calculated": np.nan})
+        qual[column_name] = pd.to_numeric(qual[column_name], errors="raise")
+
+    qual["Component Name"] = qual["Component Name"] + hrms_identifier
+    qual["IS Name"] = qual["IS Name"] + hrms_identifier
+    qual["Area"] = qual["Qual Ions Responses"]
+    qual["Retention Time"] = qual["Qual Ions Observed RTs (min)"]
+    qual["Signal / Noise"] = qual["Qual Ions Signal to Noise"]
+    qual["Calculated Concentration"] = None
+
+    # Combine original and qual rows 
+    out = pd.concat([orig, qual]).sort_index(kind="stable").reset_index(drop=True)
+
+    # Get and set IS retention time of each compound
+    is_rt = out.set_index(["Sample ID", "Component Name"])["Retention Time"]
+    out["IS Retention Time"] = out.set_index(["Sample ID", "IS Name"]).index.map(is_rt)
+
+    # Add Component Group Name
+    out["Component Group Name"] = out["IS Name"]
+    return out
+
+
 # functions
-def read_in_data_files(project_folder: str) -> tuple[pd.DataFrame, str]:
+def read_in_data_files(project_folder: str, hrms_identifier: str, data_format: str = 'sciex') -> tuple[pd.DataFrame, str]:
     """Reads in all raw data files and merges them in a common pandas data frame.
     Ensures that all sample names from core method files end with Core,
     and all sample names from extended method files end with Extended.
 
     :project_folder: path to project folder
     :project_folder: str
+    :data_format: which instrument was generating the data files ('sciex' or 'waters')
+    :data_format: str
+    :hrms_identifier: identifier for the HRMS channel (Sciex) or Qualifier channel (Waters), usually '_TOF MS' or '_Qual'
+    :hrms_identifier: str
     :raises ImportError: Data files must be of either CSV or TXT type
     :return: Data frame containing merged raw data of all files.
     :rtype: pd.DataFrame
@@ -77,11 +150,27 @@ def read_in_data_files(project_folder: str) -> tuple[pd.DataFrame, str]:
         if file_ending == 'csv':
             this_data = pd.read_csv(
                 os.path.join(project_folder, file), delimiter=',', encoding='utf-8', low_memory=False, header=0,
-                )
+                ).dropna(how="all")
+            if data_format == 'waters':
+                this_data = convert_waters_to_sciex(this_data, hrms_identifier)
+            elif data_format == 'sciex':
+                pass
+            else:
+                raise NameError(
+                    f"The data format {data_format} is not available. Please choose either 'sciex' or 'waters'."
+                    )
         elif file_ending == 'txt':
             this_data = pd.read_csv(
                 os.path.join(project_folder, file), delimiter='\t', encoding='utf-8', low_memory=False, header=0,
-                )
+                ).dropna(how="all")
+            if data_format == 'waters':
+                this_data = convert_waters_to_sciex(this_data, hrms_identifier)
+            elif data_format == 'sciex':
+                pass
+            else:
+                raise NameError(
+                    f"The data format {data_format} is not available. Please choose either 'sciex' or 'waters'."
+                    )
         else:
             raise ImportError('Raw input file paths must either be .csv or .txt files.')
         
@@ -129,7 +218,6 @@ def read_in_data_files(project_folder: str) -> tuple[pd.DataFrame, str]:
 
     # Only work with data, which is 'Used' -> Relevant for Calibration, where some of the calibration points are excluded for some compounds
     data.loc[~data['Used'],  ['Calculated Concentration', 'Actual Concentration', 'Area', 'Retention Time', 'IS Retention Time']] = np.nan
-    
     return(data, output_name)
 
 # function to extract and map indices
@@ -161,10 +249,10 @@ def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
         batch_names = sample_id_data['Batch Name'].unique()
         for batch_name in batch_names:
             # extract data for batch and get all names for related samples
-            sample_id_batch_data = sample_id_data.loc[data['Batch Name'] == batch_name,:]
+            sample_id_batch_data = sample_id_data.loc[sample_id_data['Batch Name'] == batch_name,:]
             sample_types = sample_id_batch_data['Sample Type'].unique()
             for sample_type in sample_types:
-                sample_id_batch_type_data = sample_id_batch_data.loc[data['Sample Type'] == sample_type,:]
+                sample_id_batch_type_data = sample_id_batch_data.loc[sample_id_batch_data['Sample Type'] == sample_type,:]
                 sample_names = sample_id_batch_type_data['Sample Name'].unique()
                 # get core sample names for related sample ID from related bath
                 core_sample_names = [sample_name for sample_name in sample_names if sample_name.endswith("Core")]
@@ -172,7 +260,8 @@ def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
                 # iterate over core sample names
                 for core_sample_name in core_sample_names:
                     # get data of core sample name (and batch type and id)
-                    core_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[data['Sample Name'] == core_sample_name, :]
+                    core_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[
+                        sample_id_batch_type_data['Sample Name'] == core_sample_name, :]
                     # get all indices of core samples name (and batch type and id)
                     core_sample_indices = core_sample_id_batch_type_name_data['Sample Index'].unique()
                     # get name of extended sample to pair with
@@ -180,7 +269,8 @@ def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
                     # drop extended sample from extended sample name list because it is already treated here
                     extended_sample_names = [sample_name for sample_name in extended_sample_names if sample_name != extended_sample_name]
                     # get data of extended sample to pair with 
-                    extended_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[data['Sample Name'] == extended_sample_name, :]
+                    extended_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[
+                        sample_id_batch_type_data['Sample Name'] == extended_sample_name, :]
                     # get all possible indices of extended samples to pair with
                     extended_sample_indices = extended_sample_id_batch_type_name_data['Sample Index'].unique()
 
@@ -218,7 +308,8 @@ def get_sample_id_and_name(data: pd.DataFrame) -> pd.DataFrame:
                 # iterate over remaining extended sample names
                 for extended_sample_name in extended_sample_names:
                     # get data of extended sample name (and batch type and id)
-                    extended_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[data['Sample Name'] == extended_sample_name, :]
+                    extended_sample_id_batch_type_name_data = sample_id_batch_type_data.loc[
+                        sample_id_batch_type_data['Sample Name'] == extended_sample_name, :]
                     # get all indices of extended samples name (and batch type and id)
                     extended_sample_indices = extended_sample_id_batch_type_name_data['Sample Index'].unique()
 
@@ -247,16 +338,16 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame) -> pd.DataFrame
     :return: Cleaned up data.
     :rtype: pd.DataFrame
     """    
-    # TODO make NaNs to zeros and convert zeros to ND at a later stage
 
     # Clean up 'Calculated Concentration' column
     # first set all NAN values (originally None for non-detect) to zero
     data.loc[data['Calculated Concentration'].isnull(), 'Calculated Concentration'] = 0
     # set all strange strings to NaN
     # set '<1 points' and '< 0' to 0
-    data['Calculated Concentration'] = data['Calculated Concentration'].replace(
-        {'<1 points': 0, '< 0': 0, 'no root': np.nan, 'NaN': np.nan, 'degenerate': np.nan, 'two roots': np.nan}
-        ).astype('float')
+    data['Calculated Concentration'] = data['Calculated Concentration'].replace({
+        '<1 points': 0, '< 0': 0, 'no root': np.nan, 'NaN': np.nan, 'degenerate': np.nan, 
+        'two roots': np.nan, 'Not Detected': 0, 'Not calculated': np.nan,
+        }).astype(str).str.extract(r"([\d.]+)")[0].astype(float)
     
     # Correct channel names in original data (all of the TOF channels are labelled by _TOF MS, only 2 of them are labeled by only _TOF)
     mask_names = data['Component Name'].str.endswith('_TOF')
@@ -353,6 +444,7 @@ def get_hrms_and_msms_compounds(
     delete_compounds = []
     # list of compounds already considered (can be skipped in following iterations in loop)
     skip_compounds = []
+    column_label = str.upper(hrms_identifier.replace('_', ''))  # get column label for second channel (HRMS or Quan)
     # loop over all compounds from first sample row
     for (_, compound_row) in compounds_sorted.iterrows():
         compound = compound_row['Component Name']
@@ -364,12 +456,12 @@ def get_hrms_and_msms_compounds(
             # if no msms_compound is available, make sure component is deleted at a later point
             if msms_compound.empty:
                 compounds.append(
-                    {'MSMS Compound Name': np.nan, 'HRMS Compound Name': compound, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                    {'MSMS Compound Name': np.nan, column_label + ' Compound Name': compound, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
                 )
             # if only one msms compound is available save compound and related msms to dataframe
             elif len(msms_compound) == 1:
                 compounds.append(
-                    {'MSMS Compound Name': msms_compound['Component Name'].values[0], 'HRMS Compound Name': compound, 'from method': index_to_method_mapper[int(msms_compound['Sample Index'].values[0])]}
+                    {'MSMS Compound Name': msms_compound['Component Name'].values[0], column_label + ' Compound Name': compound, 'from method': index_to_method_mapper[int(msms_compound['Sample Index'].values[0])]}
                 )
                 # if there are two HRMS compounds, delete the one from the current method - works as long as ms compound becomes for HRMS in order.
                 if len(compounds_sorted.loc[compounds_sorted['Component Name'] == compound,:]) > 1:
@@ -390,22 +482,22 @@ def get_hrms_and_msms_compounds(
             # if no hrms_compound is available, make sure component is deleted at a later point
             if hrms_compound.empty:
                 compounds.append(
-                    {'MSMS Compound Name': compound, 'HRMS Compound Name': np.nan, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                    {'MSMS Compound Name': compound, column_label + ' Compound Name': np.nan, 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
                 )
             # if only one hrms compound is available save compound and related msms to dataframe
             elif len(hrms_compound) == 1:
                 compounds.append(
-                    {'MSMS Compound Name': compound, 'HRMS Compound Name': hrms_compound['Component Name'].values[0], 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
+                    {'MSMS Compound Name': compound, column_label + ' Compound Name': hrms_compound['Component Name'].values[0], 'from method': index_to_method_mapper[int(compound_row['Sample Index'])]}
                 )
             else:
                 if index_to_method_mapper[int(compound_row['Sample Index'])] == 'core':
                     compounds.append(
-                    {'MSMS Compound Name': compound, 'HRMS Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'core'}
+                    {'MSMS Compound Name': compound, column_label + ' Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'core'}
                     )
                     delete_compounds.append({'Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'extended'})
                 else:
                     compounds.append(
-                        {'MSMS Compound Name': compound, 'HRMS Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'extended'}
+                        {'MSMS Compound Name': compound, column_label + ' Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'extended'}
                     )
                     delete_compounds.append({'Compound Name': hrms_compound['Component Name'].values[0], 'from method': 'core'})
 
@@ -417,7 +509,7 @@ def get_hrms_and_msms_compounds(
     # read in predefined order of compounds
     compounds_sorted = pd.read_csv(os.path.join('lab_parameters', 'compound_order.csv'), usecols=[0,1])
     # construct list of compounds from available channels
-    compounds_available = compounds['MSMS Compound Name'].fillna(compounds['HRMS Compound Name'])
+    compounds_available = compounds['MSMS Compound Name'].fillna(compounds[column_label + ' Compound Name'])
     compounds_available = compounds_available.str.replace(hrms_identifier, '').to_list()
     # sort available compounds according to predefined order
     compounds_available = [compound for compound in compounds_sorted['Name'] if compound in compounds_available]
@@ -464,6 +556,8 @@ def get_hrms_and_msms_standards(
     delete_standards = []
 
     skip_standards = []  # list of standards already considered (can be skipped in followin iterations in loop)
+    column_label = str.upper(hrms_identifier.replace('_', ''))  # get column label for HRMS channel
+    
     # loop over all standards from first sample
     for (_,standard_row) in eis_nis_sorted.iterrows():
         standard = standard_row['Component Name']
@@ -475,14 +569,14 @@ def get_hrms_and_msms_standards(
             if len(hrms_standard_v1) == 0 and len(hrms_standard_v2) == 0:
                 # exclude IPS-1802_PFHxS
                 if standard == 'IPS-18O2_PFHxS':
-                    standards.append({'MSMS Standard Name': standard, 'HRMS Standard Name': np.nan, 'Standard Type': standard[:3]})
+                    standards.append({'MSMS Standard Name': standard, column_label + ' Standard Name': np.nan, 'Standard Type': standard[:3]})
                 else:
                     delete_standards.append({'Compound Name': standard})
             elif len(hrms_standard_v1) <= 2 and len(hrms_standard_v2) == 0:
-                standards.append({'MSMS Standard Name': standard, 'HRMS Standard Name': standard[4:] + hrms_identifier, 'Standard Type': standard[:3]})
+                standards.append({'MSMS Standard Name': standard, column_label + ' Standard Name': standard[4:] + hrms_identifier, 'Standard Type': standard[:3]})
                 skip_standards.append(standard[4:] + hrms_identifier)  # make sure the HRMS standard is not considered more than once
             elif len(hrms_standard_v2) <= 2 and len(hrms_standard_v1) == 0:
-                standards.append({'MSMS Standard Name': standard, 'HRMS Standard Name': standard + hrms_identifier, 'Standard Type': standard[:3]})
+                standards.append({'MSMS Standard Name': standard, column_label + ' Standard Name': standard + hrms_identifier, 'Standard Type': standard[:3]})
                 skip_standards.append(standard + hrms_identifier)  # make sure the HRMS standard is not considered more than once
             else:
                 print('problem')
@@ -495,13 +589,13 @@ def get_hrms_and_msms_standards(
             if len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 0:
                 delete_standards.append({'Compound Name': standard})
             elif len(msms_standard_v2) == 1 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 0:
-                standards.append({'MSMS Standard Name': msms_standard_v2.loc[:, 'Component Name'].values[0], 'HRMS Standard Name': standard, 'Standard Type': standard[:3]})
+                standards.append({'MSMS Standard Name': msms_standard_v2.loc[:, 'Component Name'].values[0], column_label + ' Standard Name': standard, 'Standard Type': standard[:3]})
                 skip_standards.append(msms_standard_v2.loc[:, 'Component Name'].values[0])  # make sure the MSMS standard is not considered more than once
             elif len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 1 and len(msms_nis_standard_v1) == 0:
-                standards.append({'MSMS Standard Name': msms_eis_standard_v1.loc[:, 'Component Name'].values[0], 'HRMS Standard Name': standard, 'Standard Type': eis_identifier})
+                standards.append({'MSMS Standard Name': msms_eis_standard_v1.loc[:, 'Component Name'].values[0], column_label + ' Standard Name': standard, 'Standard Type': eis_identifier})
                 skip_standards.append(msms_eis_standard_v1.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
             elif len(msms_standard_v2) == 0 and len(msms_eis_standard_v1) == 0 and len(msms_nis_standard_v1) == 1:
-                standards.append({'MSMS Standard Name': msms_nis_standard_v1.loc['Component Name', :].values[0], 'HRMS Standard Name': standard, 'Standard Type': nis_identifier})
+                standards.append({'MSMS Standard Name': msms_nis_standard_v1.loc['Component Name', :].values[0], column_label + ' Standard Name': standard, 'Standard Type': nis_identifier})
                 skip_standards.append(msms_nis_standard_v1.loc['Component Name', :].values[0])  # make sure the MSMS standard is not considered more than once
             else:
                 print('problem: ', standard)
@@ -703,13 +797,13 @@ def color_fields(
     workbook.close()
 
 if __name__ == "__main__":
-    data, output_name = read_in_data_files(project_folder=r'test')
+    hrms_identifier = '_Qual'
+    data, output_name = read_in_data_files(project_folder=r'test/waters', data_format='waters', hrms_identifier=hrms_identifier)
     sample_list = get_sample_id_and_name(data=data)
     data = clean_up_data(data=data, sample_list=sample_list)
     data = reassign_tof_nis_to_eis(data)
 
-    standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
-    hrms_identifier = '_TOF MS'
+    standard_identifiers = 'Avg|EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
     compounds, delete_compounds, _ = get_hrms_and_msms_compounds(
         data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers,
         )

@@ -7,12 +7,16 @@ import pandas as pd
 import numpy as np
 import os
 
-from utils import clean_up_data, reassign_tof_nis_to_eis, get_hrms_and_msms_compounds, get_sample_id_and_name
+from utils import clean_up_data, reassign_tof_nis_to_eis, get_hrms_and_msms_compounds, \
+    get_sample_id_and_name, convert_waters_to_sciex
 
 # global variable definitions
-standard_identifiers = 'EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
+standard_identifiers = 'Avg|EIS|NIS|IDA|IPS|13C|d-|d3-|d5-|18O'
 
-def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Optional[str], filepath_extended: Optional[str],):
+def calculate_idls(
+        method_name: str, hrms_identifier: str, data_format: str,
+        filepath_core: Optional[str], filepath_extended: Optional[str],
+        ):
     """Reads in raw calibration data and automatically evaluates instrumentation detection limits based on signal to noise ratios of 10 for each compound and each channel.
     The results are saved as .csv in the lab_parameters subfolder.
 
@@ -20,6 +24,8 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
     :type method_name: str
     :param hrms_identifier: Ending of compound names used to identify high-resolution mass spectrometry channels. Examples: '_TOF MS' or '_HRMS'
     :type hrms_identifier: str
+    :param data_format: Data format of input data. Either 'waters' or 'sciex'.
+    :type data_format: str
     :param filepath_core: Path to the raw data file of the core method containing calibration data from which IDL is calculated.
     :type filepath_core: Optional[str]
     :param filepath_extended: Path to the raw data file of the extended method containing calibration data from which IDL is calculated.
@@ -35,17 +41,30 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
         'Actual Concentration', 'Component Name', 'Used', 'Signal / Noise'
     ]
 
+    if data_format == 'waters':
+        columns_considered = columns_considered + ['Sample Description']
+        column_for_point_selection = 'Sample Description'
+    elif data_format == 'sciex':
+        column_for_point_selection = 'Sample ID'
+    else:
+        raise NameError(
+                f"The data format {data_format} is not available. Please choose either 'sciex' or 'waters'."
+                ) 
+
     if filepath_core is not None:
         # Read core data
         if filepath_core.endswith('.csv'):
             data_core = pd.read_csv(
                 filepath_core, delimiter=',', encoding='utf-8', header=0,
-                )
+                ).dropna(how="all")
         elif filepath_core.endswith('.txt'):
             data_core = pd.read_csv(
-                filepath_core, delimiter='\t', encoding='utf-8', header=0,)
+                filepath_core, delimiter='\t', encoding='utf-8', header=0,
+                ).dropna(how="all")
         else:
             raise ImportError('Raw input file paths must either be .csv or .txt files.')
+        if data_format == 'waters':
+            data_core = convert_waters_to_sciex(data_core, hrms_identifier)
         data_core = data_core[columns_considered]
         mask_names = data_core['Sample Name'].str.endswith('Core')
         data_core.loc[~mask_names, 'Sample Name'] = [sample_name + ' Core' for sample_name in data_core['Sample Name'][~mask_names].to_list()]
@@ -55,13 +74,15 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
         if filepath_extended.endswith('.csv'):
             data_extended = pd.read_csv(
                 filepath_extended, delimiter=',', encoding='utf-8', low_memory=False, header=0,
-                )
+                ).dropna(how="all")
         elif filepath_extended.endswith('.txt'):
             data_extended = pd.read_csv(
                 filepath_extended, delimiter='\t', encoding='utf-8', header=0,
-                )
+                ).dropna(how="all")
         else:
             raise ImportError('Raw input file paths must either be .csv or .txt files.')
+        if data_format == 'waters':
+            data_extended = convert_waters_to_sciex(data_extended, hrms_identifier)
         data_extended = data_extended[columns_considered]
         mask_names = data_extended['Sample Name'].str.endswith('Ext')
         data_extended.loc[~mask_names, 'Sample Name'] = [sample_name + ' Ext' for sample_name in data_extended['Sample Name'][~mask_names].to_list()]
@@ -108,26 +129,30 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
                     (data['Component Name'] == compound) & (data['Sample Index'].isin(indices))
                 ), :]
 
+    hrms_label = str.upper(hrms_identifier.replace('_', ''))  # get column label for HRMS channel
+
     idl_data = pd.DataFrame(columns=["Sample Code", "Unit"] + compounds_available)
     idl_data.loc[0, 'Sample Code'] = 'MSMS IDL'
     idl_data.loc[1, 'Sample Code'] = 'MSMS LOQ'
-    idl_data.loc[2, 'Sample Code'] = 'HRMS IDL'
-    idl_data.loc[3, 'Sample Code'] = 'HRMS LOQ'
+    idl_data.loc[2, 'Sample Code'] = f'{hrms_label} IDL'
+    idl_data.loc[3, 'Sample Code'] = f'{hrms_label} LOQ'
     idl_data['Unit'] = 'ng/sample'
     
     calibration_data = data.loc[data['Sample Type'] == 'Standard', :]
-    for (msms_compound, hrms_compound) in zip(compounds['MSMS Compound Name'].tolist(), compounds['HRMS Compound Name'].tolist()):
+    for (msms_compound, hrms_compound) in zip(
+        compounds['MSMS Compound Name'].tolist(), compounds[f'{hrms_label} Compound Name'].tolist()
+        ):
         msms_data = calibration_data.loc[calibration_data['Component Name'] == msms_compound, :]
         hrms_data = calibration_data.loc[calibration_data['Component Name'] == hrms_compound, :]
         min_idl = 1e-3
         for calibration_point in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
             previous = msms_data.loc[(
-                (msms_data['Sample ID'] == f'CS{calibration_point}') &
+                (msms_data[column_for_point_selection].str.contains(f'CS{calibration_point}')) &
                 (msms_data['Used'] == True)
             ), :]
             if previous['Signal / Noise'].isna().sum() == 0:
                 this_point = msms_data.loc[(
-                    (msms_data['Sample ID'] == f'CS{calibration_point + 1}') &
+                    (msms_data[column_for_point_selection].str.contains(f'CS{calibration_point + 1}')) &
                     (msms_data['Used'] == True)
                 ), :]
                 idl = 3 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
@@ -140,12 +165,12 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
         min_idl = 1e-3
         for calibration_point in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
             previous = hrms_data.loc[(
-                (hrms_data['Sample ID'] == f'CS{calibration_point}') &
+                (hrms_data[column_for_point_selection].str.contains(f'CS{calibration_point}')) &
                 (hrms_data['Used'] == True)
             ), :]
             if previous['Signal / Noise'].isna().sum() == 0:
                 this_point = hrms_data.loc[(
-                    (hrms_data['Sample ID'] == f'CS{calibration_point + 1}') &
+                    (hrms_data[column_for_point_selection].str.contains(f'CS{calibration_point + 1}')) &
                     (hrms_data['Used'] == True)
                 ), :]
                 idl = 3 * this_point['Actual Concentration'].mean() / this_point['Signal / Noise'].mean()
@@ -167,10 +192,9 @@ def calculate_idls(method_name: str, hrms_identifier: str, filepath_core: Option
 
 if __name__ == "__main__":
     calculate_idls(
-        method_name='2026_shellfish_paula',
-        hrms_identifier='_HRMS',
-        filepath_core=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analysis\paula\20260318_Cape_Cod_Shellfish_Prelim_w_matrix_curve_core.txt',
+        method_name='2026_waters_simon',
+        hrms_identifier='_Qual',
+        data_format='waters',
+        filepath_core=r'test/waters/test_file_core.csv',
         filepath_extended=None,
     )
-
-    # filepath_extended=r'C:\Users\johanna.ganglbauer\github\PFAS-SCIEX-Data-Processing-Analy
