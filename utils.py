@@ -25,18 +25,18 @@ def convert_waters_to_sciex(data: pd.DataFrame, hrms_identifier: str) -> pd.Data
     
     # rename Waters columns to match Sciex format
     data = data.rename(columns={
-        "Injection Name": "Sample Name", 
+        "Injection Name": "Sample Name", "Sample Description": "Sample ID",
         "Compound Name": "Component Name", "Linked Internal Standard": "IS Name",
         "Acquisition Date Time": "Acquisition Date & Time", "Included in Calibration": "Used",
         "Expected Concentration": "Actual Concentration", "Signal to Noise": "Signal / Noise"
         })
     
-    # add sample ID and sample index
+    # add sample index
     # Unique Sample ID: combine Sample Name and Acquisition Date Time
-    data["Sample ID"] = data["Sample Name"].astype(str) + "_" + data["Acquisition Date & Time"].astype(str)
-
+    data['Unique Sample ID'] = data["Sample Name"].astype(str) + "_" + data["Acquisition Date & Time"].astype(str)
     # Sample Index: increments with each new Sample ID
-    data["Sample Index"] = pd.factorize(data["Sample ID"])[0] + 1
+    data["Sample Index"] = pd.factorize(data['Unique Sample ID'])[0] + 1
+    data.drop(columns=['Unique Sample ID'], inplace=True)
     
     # convert "Used" column to boolean
     data["Used"] = data["Used"].eq("Yes")
@@ -70,8 +70,8 @@ def convert_waters_to_sciex(data: pd.DataFrame, hrms_identifier: str) -> pd.Data
     out = pd.concat([orig, qual]).sort_index(kind="stable").reset_index(drop=True)
 
     # Get and set IS retention time of each compound
-    is_rt = out.set_index(["Sample ID", "Component Name"])["Retention Time"]
-    out["IS Retention Time"] = out.set_index(["Sample ID", "IS Name"]).index.map(is_rt)
+    is_rt = out.set_index(["Sample Index", "Component Name"])["Retention Time"]
+    out["IS Retention Time"] = out.set_index(["Sample Index", "IS Name"]).index.map(is_rt)
 
     # Add Component Group Name
     out["Component Group Name"] = out["IS Name"]
