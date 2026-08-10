@@ -192,9 +192,9 @@ def calculate_idls(
 
 if __name__ == "__main__":
     calculate_idls(
-        method_name='2026_waters_simon',
-        hrms_identifier='_Qual',
-        data_format='waters',
-        filepath_core=r'test/waters/test_file_core.csv',
-        filepath_extended=None,
+        method_name='2025_water_anonymous',
+        hrms_identifier='_HRMS',
+        data_format='sciex',
+        filepath_core=r'julie/water/20251123_Water_India_core.txt',
+        filepath_extended=r'julie/water/20251123_Water_India_extended.txt',
     )
