@@ -28,7 +28,7 @@ def convert_waters_to_sciex(data: pd.DataFrame, hrms_identifier: str) -> pd.Data
         "Injection Name": "Sample Name", "Sample Description": "Sample ID",
         "Compound Name": "Component Name", "Linked Internal Standard": "IS Name",
         "Acquisition Date Time": "Acquisition Date & Time", "Included in Calibration": "Used",
-        "Expected Concentration": "Actual Concentration", "Signal to Noise": "Signal / Noise"
+        "Expected Concentration": "Actual Concentration", "Signal to Noise": "Signal / Noise",
         })
     
     # add sample index
@@ -72,6 +72,9 @@ def convert_waters_to_sciex(data: pd.DataFrame, hrms_identifier: str) -> pd.Data
     # Get and set IS retention time of each compound
     is_rt = out.set_index(["Sample Index", "Component Name"])["Retention Time"]
     out["IS Retention Time"] = out.set_index(["Sample Index", "IS Name"]).index.map(is_rt)
+
+    # Delete rows with sum compounds eg PFOS = L-PFOS + Br-PFOS, to avoid trouble in recovery calculation and caluclation of IARD
+    out = out[out["Compound Type"] != "Total"]
 
     # Add Component Group Name
     out["Component Group Name"] = out["IS Name"]
