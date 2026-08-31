@@ -36,12 +36,32 @@ def convert_waters_to_sciex(data: pd.DataFrame, hrms_identifier: str) -> pd.Data
     data['Unique Sample ID'] = data["Sample Name"].astype(str) + "_" + data["Acquisition Date & Time"].astype(str)
     # Sample Index: increments with each new Sample ID
     data["Sample Index"] = pd.factorize(data['Unique Sample ID'])[0] + 1
-    data.drop(columns=['Unique Sample ID'], inplace=True)
     
     # convert "Used" column to boolean
     data["Used"] = data["Used"].eq("Yes")
-    data.loc[data['Sample Type'] != 'Standard', 'Used'] = True
+
+    # make sure all internal standards are included in calibration and final data set (Used=True)
     data.loc[data['Compound Type'] == 'Internal Standard', 'Used'] = True
+
+    # all standards which are linked to a target compound not used for calibration, should be set to Used=False
+    for idx, row in data.iterrows():
+        if row['Sample Type'] == 'Standard' and row['Used'] == False:
+            sample_id = row['Unique Sample ID']
+            eis = row['IS Name']
+            eis_mask = (data['Unique Sample ID'] == sample_id) & (data['Component Name'] == eis) & (data['Sample Name'] == row['Sample Name'])
+            data.loc[eis_mask, 'Used'] = False
+
+            nis = data.loc[eis_mask, 'IS Name'].values
+            if len(nis) > 0:
+                nis_mask = (data['Unique Sample ID'] == sample_id) & (data['Component Name'] == nis[0]) & (data['Sample Name'] == row['Sample Name'])
+                data.loc[nis_mask, 'Used'] = False
+    
+
+    data.drop(columns=['Unique Sample ID'], inplace=True)
+
+    # set all other used to True
+    data.loc[data['Sample Type'] != 'Standard', 'Used'] = True
+    
 
     # Original rows
     orig = data.copy()

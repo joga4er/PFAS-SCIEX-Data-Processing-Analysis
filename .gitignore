@@ -3,6 +3,7 @@ example_figures/*
 example_data_processed/*
 .ipynb_checkpoints/*
 .vscode/*
+analyze_calcurve.ipynb
 __pycache__/*
 taylor
 rachel
