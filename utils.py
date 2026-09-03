@@ -766,7 +766,7 @@ def change_worksheet_color(filepath: str, sheetnames: list[str], color: str) -> 
 
 def color_fields(
         filepath: str, sheetname: str, rtd: pd.DataFrame, bdl: Optional[pd.DataFrame] = None,
-        rr: Optional[pd.DataFrame] = None, iard: Optional[pd.DataFrame] = None
+        b5dl: Optional[pd.DataFrame] = None, rr: Optional[pd.DataFrame] = None, iard: Optional[pd.DataFrame] = None
         ) -> None:
 
     workbook = load_workbook(filepath)
@@ -775,6 +775,7 @@ def color_fields(
     # 3. Define fills
     rtd_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
     bdl_fill = PatternFill(start_color="FF8000", end_color="FF8000", fill_type="solid")
+    b5dl_fill = PatternFill(start_color="FFC080", end_color="FFC080", fill_type="solid")
     rr_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
     iard_fill = PatternFill(start_color="7F00FF", end_color="7F00FF", fill_type="solid")
 
@@ -793,6 +794,9 @@ def color_fields(
                 if bdl.iloc[row_idx, col_idx]:
                     cell.fill = bdl_fill
                     continue
+            if b5dl is not None and b5dl.iloc[row_idx, col_idx]:
+                cell.fill = b5dl_fill
+                continue
             if rr is not None:
                 if rr.iloc[row_idx, col_idx]:
                     cell.fill = rr_fill
