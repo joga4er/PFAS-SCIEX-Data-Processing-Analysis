@@ -36,6 +36,14 @@ def convert_waters_to_sciex(data: pd.DataFrame, hrms_identifier: str) -> pd.Data
     data['Unique Sample ID'] = data["Sample Name"].astype(str) + "_" + data["Acquisition Date & Time"].astype(str)
     # Sample Index: increments with each new Sample ID
     data["Sample Index"] = pd.factorize(data['Unique Sample ID'])[0] + 1
+
+    # rename special Waters standards that don't follow the EIS/NIS naming convention
+    data['Component Name'] = data['Component Name'].replace({
+        'Avg 13C2_PFDoA 13C2_PFTeDA': 'EIS-Avg_13C2_PFDoA_13C2_PFTeDA',
+        })
+    data['IS Name'] = data['IS Name'].replace({
+        'Avg 13C2_PFDoA 13C2_PFTeDA': 'EIS-Avg_13C2_PFDoA_13C2_PFTeDA',
+        })
     
     # convert "Used" column to boolean
     data["Used"] = data["Used"].eq("Yes")
@@ -59,9 +67,13 @@ def convert_waters_to_sciex(data: pd.DataFrame, hrms_identifier: str) -> pd.Data
 
     data.drop(columns=['Unique Sample ID'], inplace=True)
 
+    # remove ' (ALoQ)' or any '(...)' suffix from Concentration column
+    data['Calculated Concentration'] = (
+        data['Calculated Concentration'].astype(str).str.replace(r'\s*\(.*\)', '', regex=True).str.strip()
+        )
+
     # set all other used to True
     data.loc[data['Sample Type'] != 'Standard', 'Used'] = True
-    
 
     # Original rows
     orig = data.copy()
@@ -369,7 +381,7 @@ def clean_up_data(data: pd.DataFrame, sample_list: pd.DataFrame) -> pd.DataFrame
     # set '<1 points' and '< 0' to 0
     data['Calculated Concentration'] = data['Calculated Concentration'].replace({
         '<1 points': 0, '< 0': 0, 'no root': np.nan, 'NaN': np.nan, 'degenerate': np.nan, 
-        'two roots': np.nan, 'Not Detected': 0, 'Not calculated': np.nan,
+        'two roots': np.nan, 'Not Detected': 0, 'Not calculated': np.nan, 'BLoQ':np.nan
         }).astype(str).str.extract(r"([\d.]+)")[0].astype(float)
     
     # Correct channel names in original data (all of the TOF channels are labelled by _TOF MS, only 2 of them are labeled by only _TOF)
@@ -537,10 +549,21 @@ def get_hrms_and_msms_compounds(
     # sort available compounds according to predefined order
     compounds_available = [compound for compound in compounds_sorted['Name'] if compound in compounds_available]
 
+    # add compound order column (1-based) based on sorted compounds_available
+    order_mapper = {compound: i + 1 for i, compound in enumerate(compounds_available)}
+
+    # strip hrms_identifier from names for matching
+    compounds['Compound Order'] = compounds['MSMS Compound Name'].fillna(
+        compounds[column_label + ' Compound Name'].str.replace(hrms_identifier, '', regex=False)
+    ).map(order_mapper)
+
+    compounds = compounds.sort_values('Compound Order').reset_index(drop=True)
+
     return(compounds, delete_compounds, compounds_available)
 
 def get_hrms_and_msms_standards(
         data: pd.DataFrame, sample_list: pd.DataFrame, hrms_identifier: str, standard_identifiers: str, eis_identifier: str, nis_identifier: str,
+        compound_order_offset: int = 0,
         ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Order of standards is conserved and the names are split to the (MS/MS) channel, and the HRMS channel. If either channel is not available,
     it is saved to a dataframe meant to delete standards at a later stage.
@@ -557,6 +580,8 @@ def get_hrms_and_msms_standards(
     :type eis_identifier: str
     :param nis_identifier: Identifier for NIS channel, usually 'NIS' or 'IPS'.
     :type nis_identifier: str
+    :param compound_order_offset: Highest Compound Order number from get_hrms_and_msms_compounds, used to continue numbering.
+    :type compound_order_offset: int
     :return: - standards: Dataframe containing standards in right order and the type of standard.
              - delete_standards: Dataframe containing standards which should be deleted, because they do not have a MSMS or HRMS counterpart.
     :rtype: tuple[pd.DataFrame, pd.DataFrame]
@@ -626,6 +651,26 @@ def get_hrms_and_msms_standards(
 
     standards = pd.DataFrame(standards)
     delete_standards = pd.DataFrame(delete_standards)
+
+    # read in predefined order of standards
+    standards_sorted = pd.read_csv(os.path.join('lab_parameters', 'standard_order.csv'), usecols=[0, 1])
+
+    # construct list of standards from available channels (strip hrms_identifier for matching)
+    standards_available = standards['MSMS Standard Name'].fillna(
+        standards[column_label + ' Standard Name'].str.replace(hrms_identifier, '', regex=False)
+    )
+
+    # build mapper based on predefined order, continuing numbering from compound_order_offset
+    order_mapper = {
+        standard: i + 1 + compound_order_offset
+        for i, standard in enumerate(standards_sorted['Name'])
+        if standard in standards_available.values
+    }
+
+    standards['Compound Order'] = standards_available.map(order_mapper)
+
+    # sort standards according to predefined order
+    standards = standards.sort_values('Compound Order').reset_index(drop=True)
 
     return standards, delete_standards
 
@@ -836,4 +881,6 @@ if __name__ == "__main__":
         )
     standards, delete_standards = get_hrms_and_msms_standards(
         data=data, sample_list=sample_list, hrms_identifier=hrms_identifier, standard_identifiers=standard_identifiers, eis_identifier='EIS', nis_identifier='NIS',
+        compound_order_offset=int(compounds['Compound Order'].max())
     )
+    print(standards)
